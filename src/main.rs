@@ -12,12 +12,15 @@ use glutin::event_loop::ControlFlow;
 pub mod point_light;
 pub mod scenenode;
 use imgui::{CollapsingHeader, Condition};
-use noise::Noise;
+use mesh::Mesh;
+use noise_map::NoiseMap;
 use point_light::PointLight;
+use scenenode::SceneNode;
 pub mod material;
 pub mod mesh;
-pub mod noise;
+pub mod noise_map;
 pub mod shader;
+pub mod triangle;
 pub mod utils;
 pub mod vertex;
 
@@ -30,7 +33,6 @@ unsafe fn draw_scene(
     view_projection_matrix: &glm::Mat4,
     light: &PointLight,
     cam_pos: &glm::Vec3,
-    noise: &Noise,
 ) {
     for node in nodes {
         let mut model_matrix = glm::Mat4::identity();
@@ -62,14 +64,6 @@ unsafe fn draw_scene(
         gl::Uniform3fv(14, 1, light.ambient.as_ptr());
         gl::Uniform3fv(15, 1, light.diffuse.as_ptr());
         gl::Uniform3fv(16, 1, light.specular.as_ptr());
-
-        gl::Uniform1f(17, noise.strength);
-        gl::Uniform1f(18, noise.base_roughness);
-        gl::Uniform1f(19, noise.roughness);
-        gl::Uniform1f(20, noise.persistence);
-        gl::Uniform3fv(21, 1, noise.center.as_ptr());
-        gl::Uniform1i(22, noise.num_layers as i32);
-        gl::Uniform1f(23, noise.min_value);
 
         gl::DrawElements(
             gl::TRIANGLES,
@@ -147,13 +141,29 @@ fn main() {
         specular: glm::vec3(1.0, 1.0, 1.0),
     };
 
-    let mut scene = vec![];
+    let map_width = 40;
+    let map_height = 40;
+
+    let noise_map = NoiseMap::generate_noise_map(map_width, map_height, 1.5);
+    let terrain_mesh = Mesh::mesh_from_height_map(noise_map, map_width, map_height);
+
+    let terrain_vao = unsafe { terrain_mesh.create_vao() };
+
+    let mut scene = vec![SceneNode {
+        vao_id: terrain_vao,
+        index_count: terrain_mesh.indices.len() as i32,
+        shader_program: shape_shader.program_id,
+        position: glm::vec3(0.0, 0.0, 0.0),
+        reference_point: glm::vec3(0.0, 0.0, 0.0),
+        scale: glm::vec3(1.0, 1.0, 1.0),
+        rotation: glm::vec3(0.0, 0.0, 0.0),
+    }];
 
     let first_frame_time = std::time::Instant::now();
     let mut previous_frame_time = first_frame_time;
 
-    let mut cam_pos: glm::Vec3 = glm::vec3(0.0, 0.0, 5.0);
-    let mut cam_dir: glm::Vec3 = glm::vec3(0.0, 0.0, 0.0);
+    let mut cam_pos: glm::Vec3 = glm::vec3(0.0, 4.0, 5.0);
+    let mut cam_dir: glm::Vec3 = glm::vec3(1.0, 0.0, 1.0);
     let mut yaw: f32 = -90.0;
     let mut pitch: f32 = 0.0;
 
@@ -163,7 +173,7 @@ fn main() {
     let move_speed: f32 = 10.0;
     let cam_speed: f32 = 100.0;
 
-    let mut noise = noise::Noise::new();
+    let mut noise = noise_map::NoiseMap::new();
 
     // Start the event loop -- This is where window events are initially handled
     event_loop.run(move |event, _, control_flow| {
@@ -373,20 +383,21 @@ fn main() {
                             }
 
                             ui.separator();
-                            ui.text("Noise");
 
-                            ui.slider("strength", 0.0, 10.0, &mut noise.strength);
+                            if CollapsingHeader::new("Noise").build(ui) {
+                                ui.slider("strength", 0.0, 10.0, &mut noise.strength);
 
-                            ui.slider("base roughness", 0.0, 10.0, &mut noise.base_roughness);
-                            ui.slider("roughness", 0.0, 10.0, &mut noise.roughness);
+                                ui.slider("base roughness", 0.0, 10.0, &mut noise.base_roughness);
+                                ui.slider("roughness", 0.0, 10.0, &mut noise.roughness);
 
-                            ui.slider("persistence", 0.0, 1.0, &mut noise.persistence);
-                            ui.slider("layers", 1, 10, &mut noise.num_layers);
-                            ui.slider("min value", 0.0, 10.0, &mut noise.min_value);
+                                ui.slider("persistence", 0.0, 1.0, &mut noise.persistence);
+                                ui.slider("layers", 1, 10, &mut noise.num_layers);
+                                ui.slider("min value", 0.0, 10.0, &mut noise.min_value);
 
-                            ui.slider("center x", -1.0, 1.0, &mut noise.center[0]);
-                            ui.slider("center y", -1.0, 1.0, &mut noise.center[1]);
-                            ui.slider("center z", -1.0, 1.0, &mut noise.center[2]);
+                                ui.slider("center x", -1.0, 1.0, &mut noise.center[0]);
+                                ui.slider("center y", -1.0, 1.0, &mut noise.center[1]);
+                                ui.slider("center z", -1.0, 1.0, &mut noise.center[2]);
+                            }
                         });
 
                     winit_platform.prepare_render(&ui, &window);
@@ -397,7 +408,6 @@ fn main() {
                         &transformation_matrix,
                         &point_light_source,
                         &cam_pos,
-                        &noise,
                     );
                 }
 
