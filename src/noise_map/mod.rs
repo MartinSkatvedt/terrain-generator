@@ -1,8 +1,11 @@
-use crate::{mesh::Mesh, noise_map_settings::NoiseMapSettings};
+pub mod noise_map_settings;
+use crate::{material::Material, mesh::Mesh};
 use lininterp::InvLerp;
 use noise::{NoiseFn, Perlin};
 use rand::prelude::*;
 use rand_chacha::ChaCha8Rng;
+
+use self::noise_map_settings::NoiseMapSettings;
 
 pub struct NoiseMap {
     data: Vec<Vec<f64>>,
@@ -41,8 +44,8 @@ impl NoiseMap {
                 let mut noise_height = 0.0;
 
                 for _ in 0..octaves {
-                    let offset_x = rng.gen_range(-100_000.0..100_000.0) + offset_x;
-                    let offset_y = rng.gen_range(-100_000.0..100_000.0) + offset_y;
+                    let offset_x_random = rng.gen_range(-100_000.0..100_000.0) + offset_x;
+                    let offset_y_random = rng.gen_range(-100_000.0..100_000.0) + offset_y;
 
                     let sample_x = (x as f64 - half_width) / clamped_scale * frequency + offset_x;
                     let sample_y = (y as f64 - half_height) / clamped_scale * frequency + offset_y;
@@ -66,7 +69,7 @@ impl NoiseMap {
         //Normalize between 0 and 1
         for y in 0..height {
             for x in 0..width {
-                InvLerp::inv_lerp(
+                noise_map[x as usize][y as usize] = InvLerp::inv_lerp(
                     &noise_map[x as usize][y as usize],
                     &min_noise_height,
                     &max_noise_height,
@@ -77,8 +80,8 @@ impl NoiseMap {
         NoiseMap { data: noise_map }
     }
 
-    pub fn generate_mesh(&self) -> Mesh {
-        let mesh = Mesh::mesh_from_height_map(&self.data);
+    pub fn generate_mesh(&self, materials: &Vec<Material>) -> Mesh {
+        let mesh = Mesh::mesh_from_height_map(&self.data, materials);
 
         mesh
     }

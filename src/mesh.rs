@@ -20,7 +20,7 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn mesh_from_height_map(height_map: &Vec<Vec<f64>>) -> Mesh {
+    pub fn mesh_from_height_map(height_map: &Vec<Vec<f64>>, materials: &Vec<Material>) -> Mesh {
         let width = height_map.len() as u32;
         let height = height_map[0].len() as u32;
 
@@ -31,16 +31,28 @@ impl Mesh {
         let mut normals: Vec<f32> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
 
+        let half_x = width as f32 / 2.0;
+        let half_z = height as f32 / 2.0;
+
         for x in 0..width {
             for z in 0..height {
                 let vertex_height = height_map[x as usize][z as usize] as f32;
 
-                let vertex = Vertex {
-                    position: glm::vec3(x as f32, vertex_height, z as f32),
-                    material: Material::standard_material(),
-                };
+                for material in materials.iter() {
+                    if vertex_height <= material.height_limit {
+                        let vertex = Vertex {
+                            position: glm::vec3(
+                                (x as f32) - half_x,
+                                vertex_height,
+                                z as f32 - half_z,
+                            ),
+                            material: *material,
+                        };
 
-                shape_vertices.push(vertex);
+                        shape_vertices.push(vertex);
+                        break;
+                    }
+                }
 
                 if x < width - 1 && z < height - 1 {
                     let triangle_1 = Triangle::new(

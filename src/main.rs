@@ -12,17 +12,14 @@ use glutin::event_loop::ControlFlow;
 pub mod point_light;
 pub mod scenenode;
 use imgui::{CollapsingHeader, Condition};
-use material::Material;
-use noise_map::NoiseMap;
+use material::{material_settings::MaterialSettings, Material};
+use noise_map::{noise_map_settings, NoiseMap};
 use point_light::PointLight;
 use scenenode::SceneNode;
-use terrain_gradient::TerrainType;
 pub mod material;
 pub mod mesh;
 pub mod noise_map;
-pub mod noise_map_settings;
 pub mod shader;
-pub mod terrain_gradient;
 pub mod triangle;
 pub mod utils;
 pub mod vertex;
@@ -144,38 +141,35 @@ fn main() {
         specular: glm::vec3(1.0, 1.0, 1.0),
     };
 
-    let grass_material = Material {
-        ambient: [0.475, 0.91, 0.455],
-        diffuse: [0.475, 0.91, 0.455],
-        specular: [1.0, 1.0, 1.0],
-        shininess: 16.0,
-    };
-
-    let grass_terrain = TerrainType {
-        name: "Grass".to_string(),
-        height: 0.4,
-        material: grass_material,
-    };
-
-    let water_material = Material {
+    let mut water_material_settings = MaterialSettings {
+        name: "Water".to_string(),
         ambient: [0.267, 0.322, 0.722],
         diffuse: [0.267, 0.322, 0.722],
         specular: [1.0, 1.0, 1.0],
         shininess: 16.0,
+        height_limit: 0.4,
     };
 
-    let water_terrain = TerrainType {
-        name: "Water".to_string(),
-        height: 1.0,
-        material: water_material,
+    let mut grass_material_settings = MaterialSettings {
+        name: "Grass".to_string(),
+        ambient: [0.475, 0.91, 0.455],
+        diffuse: [0.475, 0.91, 0.455],
+        specular: [0.5, 0.5, 0.5],
+        shininess: 2.0,
+        height_limit: 1.0,
     };
 
-    let mut terrain_types = vec![grass_terrain, water_terrain];
+    let grass_material = Material::new(&grass_material_settings);
+
+    let water_material = Material::new(&water_material_settings);
+
+    let mut materials = vec![water_material, grass_material];
+    let mut material_settings = vec![grass_material_settings, water_material_settings];
 
     let mut noise_map_settings = noise_map_settings::NoiseMapSettings::new();
 
     let noise_map = NoiseMap::new(noise_map_settings);
-    let terrain_mesh = noise_map.generate_mesh();
+    let terrain_mesh = noise_map.generate_mesh(&materials);
 
     let terrain_vao = unsafe { terrain_mesh.create_vao() };
 
@@ -375,17 +369,17 @@ fn main() {
 
                     let ui = imgui.frame();
                     let mut new_noise_map_settings = noise_map_settings.clone();
+                    let mut new_material_settings = material_settings.clone();
 
                     ui.window("Settings")
                         .size([300.0, 500.0], Condition::FirstUseEver)
                         .build(|| {
                             ui.text(format!("FPS: {}", (1.0 / delta_time).ceil()));
                             ui.separator();
-                            ui.input_int("Width", &mut new_noise_map_settings.width)
-                                .build();
-                            ui.input_int("Height", &mut new_noise_map_settings.height)
-                                .build();
+                            ui.text("Terrain Settings");
 
+                            ui.slider("Width", 10, 500, &mut new_noise_map_settings.width);
+                            ui.slider("Height", 10, 500, &mut new_noise_map_settings.height);
                             ui.slider("Scale", 0.0, 100.0, &mut new_noise_map_settings.scale);
                             ui.slider("Octaves", 0, 20, &mut new_noise_map_settings.octaves);
                             ui.slider(
@@ -417,6 +411,7 @@ fn main() {
                             );
 
                             ui.separator();
+                            ui.text("Lighting");
 
                             if CollapsingHeader::new("Lightsource").build(ui) {
                                 ui.slider("Ambient r", 0.0, 1.0, &mut point_light_source.ambient.x);
@@ -446,13 +441,89 @@ fn main() {
                                     &mut point_light_source.specular.z,
                                 );
                             }
+
+                            ui.separator();
+                            ui.text("Material Settings");
+                            for material_setting in &mut new_material_settings {
+                                if CollapsingHeader::new(&material_setting.name).build(ui) {
+                                    ui.slider(
+                                        format!("Ambient r##{}", material_setting.name),
+                                        0.0,
+                                        1.0,
+                                        &mut material_setting.ambient[0],
+                                    );
+                                    ui.slider(
+                                        format!("Ambient g##{}", material_setting.name),
+                                        0.0,
+                                        1.0,
+                                        &mut material_setting.ambient[1],
+                                    );
+                                    ui.slider(
+                                        format!("Ambient b##{}", material_setting.name),
+                                        0.0,
+                                        1.0,
+                                        &mut material_setting.ambient[2],
+                                    );
+
+                                    ui.slider(
+                                        format!("Diffuse r##{}", material_setting.name),
+                                        0.0,
+                                        1.0,
+                                        &mut material_setting.diffuse[0],
+                                    );
+                                    ui.slider(
+                                        format!("Diffuse g##{}", material_setting.name),
+                                        0.0,
+                                        1.0,
+                                        &mut material_setting.diffuse[1],
+                                    );
+                                    ui.slider(
+                                        format!("Diffuse b##{}", material_setting.name),
+                                        0.0,
+                                        1.0,
+                                        &mut material_setting.diffuse[2],
+                                    );
+
+                                    ui.slider(
+                                        format!("Specular r##{}", material_setting.name),
+                                        0.0,
+                                        1.0,
+                                        &mut material_setting.specular[0],
+                                    );
+                                    ui.slider(
+                                        format!("Specular g##{}", material_setting.name),
+                                        0.0,
+                                        1.0,
+                                        &mut material_setting.specular[1],
+                                    );
+                                    ui.slider(
+                                        format!("Specular b##{}", material_setting.name),
+                                        0.0,
+                                        1.0,
+                                        &mut material_setting.specular[2],
+                                    );
+                                    ui.slider(
+                                        format!("Shininess##{}", material_setting.name),
+                                        0.0,
+                                        256.0,
+                                        &mut material_setting.shininess,
+                                    );
+
+                                    ui.slider(
+                                        format!("Height limit##{}", material_setting.name),
+                                        0.0,
+                                        1.0,
+                                        &mut material_setting.height_limit,
+                                    );
+                                }
+                            }
                         });
 
                     if new_noise_map_settings != noise_map_settings {
                         noise_map_settings = new_noise_map_settings;
 
                         let new_noise_map = NoiseMap::new(noise_map_settings);
-                        let new_terrain_mesh = new_noise_map.generate_mesh();
+                        let new_terrain_mesh = new_noise_map.generate_mesh(&materials);
 
                         scene = vec![SceneNode {
                             vao_id: new_terrain_mesh.create_vao(),
@@ -465,15 +536,15 @@ fn main() {
                         }];
                     }
 
-                    winit_platform.prepare_render(&ui, &window);
-                    renderer.render(&mut imgui);
-
                     draw_scene(
                         &mut scene,
                         &transformation_matrix,
                         &point_light_source,
                         &cam_pos,
                     );
+
+                    winit_platform.prepare_render(&ui, &window);
+                    renderer.render(&mut imgui);
                 }
 
                 // Display the new color buffer on the display
