@@ -20,7 +20,10 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn mesh_from_height_map(height_map: Vec<Vec<f64>>, width: u32, height: u32) -> Mesh {
+    pub fn mesh_from_height_map(height_map: &Vec<Vec<f64>>) -> Mesh {
+        let width = height_map.len() as u32;
+        let height = height_map[0].len() as u32;
+
         let mut shape_vertices: Vec<Vertex> = Vec::new();
         let mut shape_triangles: Vec<Triangle> = Vec::new();
 

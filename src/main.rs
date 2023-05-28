@@ -12,14 +12,17 @@ use glutin::event_loop::ControlFlow;
 pub mod point_light;
 pub mod scenenode;
 use imgui::{CollapsingHeader, Condition};
-use mesh::Mesh;
+use material::Material;
 use noise_map::NoiseMap;
 use point_light::PointLight;
 use scenenode::SceneNode;
+use terrain_gradient::TerrainType;
 pub mod material;
 pub mod mesh;
 pub mod noise_map;
+pub mod noise_map_settings;
 pub mod shader;
+pub mod terrain_gradient;
 pub mod triangle;
 pub mod utils;
 pub mod vertex;
@@ -141,11 +144,38 @@ fn main() {
         specular: glm::vec3(1.0, 1.0, 1.0),
     };
 
-    let map_width = 40;
-    let map_height = 40;
+    let grass_material = Material {
+        ambient: [0.475, 0.91, 0.455],
+        diffuse: [0.475, 0.91, 0.455],
+        specular: [1.0, 1.0, 1.0],
+        shininess: 16.0,
+    };
 
-    let noise_map = NoiseMap::generate_noise_map(map_width, map_height, 1.5);
-    let terrain_mesh = Mesh::mesh_from_height_map(noise_map, map_width, map_height);
+    let grass_terrain = TerrainType {
+        name: "Grass".to_string(),
+        height: 0.4,
+        material: grass_material,
+    };
+
+    let water_material = Material {
+        ambient: [0.267, 0.322, 0.722],
+        diffuse: [0.267, 0.322, 0.722],
+        specular: [1.0, 1.0, 1.0],
+        shininess: 16.0,
+    };
+
+    let water_terrain = TerrainType {
+        name: "Water".to_string(),
+        height: 1.0,
+        material: water_material,
+    };
+
+    let mut terrain_types = vec![grass_terrain, water_terrain];
+
+    let mut noise_map_settings = noise_map_settings::NoiseMapSettings::new();
+
+    let noise_map = NoiseMap::new(noise_map_settings);
+    let terrain_mesh = noise_map.generate_mesh();
 
     let terrain_vao = unsafe { terrain_mesh.create_vao() };
 
@@ -172,8 +202,6 @@ fn main() {
 
     let move_speed: f32 = 10.0;
     let cam_speed: f32 = 100.0;
-
-    let mut noise = noise_map::NoiseMap::new();
 
     // Start the event loop -- This is where window events are initially handled
     event_loop.run(move |event, _, control_flow| {
@@ -346,11 +374,48 @@ fn main() {
                     let window = context.window();
 
                     let ui = imgui.frame();
+                    let mut new_noise_map_settings = noise_map_settings.clone();
 
                     ui.window("Settings")
                         .size([300.0, 500.0], Condition::FirstUseEver)
                         .build(|| {
                             ui.text(format!("FPS: {}", (1.0 / delta_time).ceil()));
+                            ui.separator();
+                            ui.input_int("Width", &mut new_noise_map_settings.width)
+                                .build();
+                            ui.input_int("Height", &mut new_noise_map_settings.height)
+                                .build();
+
+                            ui.slider("Scale", 0.0, 100.0, &mut new_noise_map_settings.scale);
+                            ui.slider("Octaves", 0, 20, &mut new_noise_map_settings.octaves);
+                            ui.slider(
+                                "Persistance",
+                                0.0,
+                                1.0,
+                                &mut new_noise_map_settings.persistence,
+                            );
+                            ui.slider(
+                                "Lacunarity",
+                                1.0,
+                                10.0,
+                                &mut new_noise_map_settings.lacunarity,
+                            );
+                            ui.slider("Seed", -100, 100, &mut new_noise_map_settings.seed);
+
+                            ui.slider(
+                                "Offset x",
+                                -10.0,
+                                10.0,
+                                &mut new_noise_map_settings.offset_x,
+                            );
+
+                            ui.slider(
+                                "Offset y",
+                                -10.0,
+                                10.0,
+                                &mut new_noise_map_settings.offset_y,
+                            );
+
                             ui.separator();
 
                             if CollapsingHeader::new("Lightsource").build(ui) {
@@ -381,24 +446,24 @@ fn main() {
                                     &mut point_light_source.specular.z,
                                 );
                             }
-
-                            ui.separator();
-
-                            if CollapsingHeader::new("Noise").build(ui) {
-                                ui.slider("strength", 0.0, 10.0, &mut noise.strength);
-
-                                ui.slider("base roughness", 0.0, 10.0, &mut noise.base_roughness);
-                                ui.slider("roughness", 0.0, 10.0, &mut noise.roughness);
-
-                                ui.slider("persistence", 0.0, 1.0, &mut noise.persistence);
-                                ui.slider("layers", 1, 10, &mut noise.num_layers);
-                                ui.slider("min value", 0.0, 10.0, &mut noise.min_value);
-
-                                ui.slider("center x", -1.0, 1.0, &mut noise.center[0]);
-                                ui.slider("center y", -1.0, 1.0, &mut noise.center[1]);
-                                ui.slider("center z", -1.0, 1.0, &mut noise.center[2]);
-                            }
                         });
+
+                    if new_noise_map_settings != noise_map_settings {
+                        noise_map_settings = new_noise_map_settings;
+
+                        let new_noise_map = NoiseMap::new(noise_map_settings);
+                        let new_terrain_mesh = new_noise_map.generate_mesh();
+
+                        scene = vec![SceneNode {
+                            vao_id: new_terrain_mesh.create_vao(),
+                            index_count: new_terrain_mesh.indices.len() as i32,
+                            shader_program: shape_shader.program_id,
+                            position: glm::vec3(0.0, 0.0, 0.0),
+                            reference_point: glm::vec3(0.0, 0.0, 0.0),
+                            scale: glm::vec3(1.0, 1.0, 1.0),
+                            rotation: glm::vec3(0.0, 0.0, 0.0),
+                        }];
+                    }
 
                     winit_platform.prepare_render(&ui, &window);
                     renderer.render(&mut imgui);
