@@ -1,7 +1,7 @@
 extern crate nalgebra_glm as glm;
 use std::{cmp::Ordering, ptr};
 
-use curve_editor::CurveEditor;
+use curve_editor::curve::Curve;
 use glutin::event::{
     ElementState::{Pressed, Released},
     Event, KeyboardInput,
@@ -16,7 +16,7 @@ use light::point_light_settings::PointLightSettings;
 pub mod scenenode;
 use imgui::Condition;
 use material::{material_settings::MaterialSettings, Material};
-use noise::Curve;
+use mesh::mesh_settings::MeshSettings;
 use noise_map::{noise_map_settings, NoiseMap};
 use scenenode::SceneNode;
 pub mod curve_editor;
@@ -138,6 +138,10 @@ fn main() {
             .link()
     };
 
+    let cubic_curve = Curve::cubic();
+    let mut standard_mesh_settings =
+        MeshSettings::new("Standard Mesh".to_string(), 10.0, cubic_curve);
+
     let mut point_light_settings = PointLightSettings {
         name: "Point Light".to_string(),
         position: glm::vec3(0.0, 10.0, 0.0),
@@ -155,6 +159,15 @@ fn main() {
         specular: [1.0, 1.0, 1.0],
         shininess: 16.0,
         height_limit: 0.4,
+    };
+
+    let sand_material_settings = MaterialSettings {
+        name: "Sand".to_string(),
+        ambient: [0.8, 0.8, 0.4],
+        diffuse: [0.8, 0.8, 0.4],
+        specular: [0.5, 0.5, 0.5],
+        shininess: 2.0,
+        height_limit: 0.45,
     };
 
     let grass_material_settings = MaterialSettings {
@@ -176,18 +189,21 @@ fn main() {
     };
 
     let grass_material = Material::new(&grass_material_settings);
+    let sand_material = Material::new(&sand_material_settings);
     let water_material = Material::new(&water_material_settings);
     let snow_material = Material::new(&snow_material_settings);
 
-    let mut materials = vec![water_material, grass_material, snow_material];
+    let mut materials = vec![water_material, sand_material, grass_material, snow_material];
     let mut material_settings = vec![
-        grass_material_settings,
         water_material_settings,
+        sand_material_settings,
+        grass_material_settings,
         snow_material_settings,
     ];
 
     let mut noise_map_settings = noise_map_settings::NoiseMapSettings::new();
-    let terrain_mesh = NoiseMap::new(noise_map_settings).generate_mesh(&materials);
+    let terrain_mesh =
+        NoiseMap::new(noise_map_settings).generate_mesh(&materials, &mut standard_mesh_settings);
     let terrain_vao = unsafe { terrain_mesh.create_vao() };
 
     let mut scene = vec![SceneNode {
@@ -385,6 +401,7 @@ fn main() {
                     let window = context.window();
                     let ui = imgui.frame();
 
+                    let mut new_mesh_settings = standard_mesh_settings.clone();
                     let mut new_noise_map_settings = noise_map_settings.clone();
                     let mut new_material_settings = material_settings.clone();
 
@@ -396,7 +413,9 @@ fn main() {
 
                             ui.text("Terrain Settings");
                             new_noise_map_settings.render(ui);
-                            CurveEditor::new("Terrain Curve Editor").render(ui);
+
+                            ui.text("Mesh Settings");
+                            new_mesh_settings.render(ui);
 
                             ui.separator();
                             ui.text("Lighting");
@@ -413,6 +432,7 @@ fn main() {
 
                     if new_material_settings != material_settings
                         || new_noise_map_settings != noise_map_settings
+                        || new_mesh_settings != standard_mesh_settings
                     {
                         let mut new_materials = vec![];
 
@@ -435,7 +455,8 @@ fn main() {
                         });
 
                         let new_noise_map = NoiseMap::new(new_noise_map_settings);
-                        let new_terrain_mesh = new_noise_map.generate_mesh(&new_materials);
+                        let new_terrain_mesh =
+                            new_noise_map.generate_mesh(&new_materials, &mut new_mesh_settings);
 
                         scene = vec![SceneNode {
                             vao_id: new_terrain_mesh.create_vao(),
@@ -451,6 +472,7 @@ fn main() {
 
                         materials = new_materials;
                         noise_map_settings = new_noise_map_settings;
+                        standard_mesh_settings = new_mesh_settings;
                     }
 
                     draw_scene(

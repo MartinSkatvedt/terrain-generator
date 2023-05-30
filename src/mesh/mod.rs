@@ -1,6 +1,10 @@
+pub mod mesh_settings;
+
 use std::ptr;
 
 use crate::{material::Material, triangle::Triangle, utils, vertex::Vertex};
+
+use self::mesh_settings::MeshSettings;
 
 pub struct MeshMaterial {
     pub ambient: Vec<f32>,
@@ -20,7 +24,11 @@ pub struct Mesh {
 }
 
 impl Mesh {
-    pub fn mesh_from_height_map(height_map: &Vec<Vec<f64>>, materials: &Vec<Material>) -> Mesh {
+    pub fn mesh_from_height_map(
+        height_map: &Vec<Vec<f64>>,
+        materials: &Vec<Material>,
+        settings: &MeshSettings,
+    ) -> Mesh {
         let width = height_map.len() as u32;
         let height = height_map[0].len() as u32;
 
@@ -43,7 +51,8 @@ impl Mesh {
                         let vertex = Vertex {
                             position: glm::vec3(
                                 (x as f32) - half_x,
-                                vertex_height,
+                                settings.curve.evaluate(vertex_height as f64) as f32
+                                    * settings.strength,
                                 z as f32 - half_z,
                             ),
                             material: *material,

@@ -1,4 +1,7 @@
+use bezier_rs::TValueType;
 use imgui::{ImString, Ui};
+
+use super::curve::Curve;
 
 pub struct CurveEditor {
     name: ImString,
@@ -11,7 +14,7 @@ impl CurveEditor {
         }
     }
 
-    pub unsafe fn render(&self, ui: &Ui) {
+    pub unsafe fn render(&self, ui: &Ui, curve: &mut Curve) {
         ui.text(&self.name);
 
         let draw_list = ui.get_window_draw_list();
@@ -60,6 +63,23 @@ impl CurveEditor {
                 .thickness(0.3)
                 .build();
             y += gridline_spacing;
+        }
+
+        let detail: usize = 20;
+
+        let points = curve
+            .curve
+            .compute_lookup_table(Some(detail), Some(TValueType::Parametric));
+
+        let canvas_width = canvas_bottom_right[0] - canvas_top_left[0];
+
+        for point in points {
+            let x = (canvas_width as f64 * point.x) + canvas_top_left[0] as f64;
+            let y = canvas_bottom_right[1] as f64 - (height as f64 * point.y);
+
+            draw_list
+                .add_circle([x as f32, y as f32], 2.0, [1.0, 1.0, 0.0, 1.0])
+                .build();
         }
 
         //move cursor for next widget

@@ -1,4 +1,4 @@
-use imgui::{CollapsingHeader, Ui};
+use imgui::Ui;
 #[derive(Clone, Copy, PartialEq)]
 pub struct NoiseMapSettings {
     pub width: i32,
