@@ -2,7 +2,7 @@ use self::material_settings::MaterialSettings;
 
 pub mod material_settings;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Material {
     pub ambient: [f32; 3],
     pub diffuse: [f32; 3],

@@ -1,3 +1,5 @@
+use imgui::{CollapsingHeader, Ui};
+
 #[derive(Clone, PartialEq)]
 pub struct MaterialSettings {
     pub name: String,
@@ -27,14 +29,77 @@ impl MaterialSettings {
         }
     }
 
-    pub fn standard_material_settings() -> MaterialSettings {
-        MaterialSettings {
-            name: "Standard".to_string(),
-            ambient: [1.0, 0.7, 0.81],
-            diffuse: [1.0, 0.5, 0.31],
-            specular: [0.5, 0.5, 0.5],
-            shininess: 32.0,
-            height_limit: 0.5,
+    pub fn render(&mut self, ui: &Ui) {
+        if CollapsingHeader::new(&self.name).build(ui) {
+            ui.slider(
+                format!("Ambient r##{}", self.name),
+                0.0,
+                1.0,
+                &mut self.ambient[0],
+            );
+            ui.slider(
+                format!("Ambient g##{}", self.name),
+                0.0,
+                1.0,
+                &mut self.ambient[1],
+            );
+            ui.slider(
+                format!("Ambient b##{}", self.name),
+                0.0,
+                1.0,
+                &mut self.ambient[2],
+            );
+
+            ui.slider(
+                format!("Diffuse r##{}", self.name),
+                0.0,
+                1.0,
+                &mut self.diffuse[0],
+            );
+            ui.slider(
+                format!("Diffuse g##{}", self.name),
+                0.0,
+                1.0,
+                &mut self.diffuse[1],
+            );
+            ui.slider(
+                format!("Diffuse b##{}", self.name),
+                0.0,
+                1.0,
+                &mut self.diffuse[2],
+            );
+
+            ui.slider(
+                format!("Specular r##{}", self.name),
+                0.0,
+                1.0,
+                &mut self.specular[0],
+            );
+            ui.slider(
+                format!("Specular g##{}", self.name),
+                0.0,
+                1.0,
+                &mut self.specular[1],
+            );
+            ui.slider(
+                format!("Specular b##{}", self.name),
+                0.0,
+                1.0,
+                &mut self.specular[2],
+            );
+            ui.slider(
+                format!("Shininess##{}", self.name),
+                1.0,
+                256.0,
+                &mut self.shininess,
+            );
+
+            ui.slider(
+                format!("Height limit##{}", self.name),
+                0.0,
+                1.0,
+                &mut self.height_limit,
+            );
         }
     }
 }

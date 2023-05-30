@@ -1,6 +1,7 @@
 extern crate nalgebra_glm as glm;
-use std::ptr;
+use std::{cmp::Ordering, ptr};
 
+use curve_editor::CurveEditor;
 use glutin::event::{
     ElementState::{Pressed, Released},
     Event, KeyboardInput,
@@ -9,13 +10,16 @@ use glutin::event::{
 };
 use glutin::event_loop::ControlFlow;
 
-pub mod point_light;
+pub mod light;
+use light::point_light::PointLight;
+use light::point_light_settings::PointLightSettings;
 pub mod scenenode;
-use imgui::{CollapsingHeader, Condition};
+use imgui::Condition;
 use material::{material_settings::MaterialSettings, Material};
+use noise::Curve;
 use noise_map::{noise_map_settings, NoiseMap};
-use point_light::PointLight;
 use scenenode::SceneNode;
+pub mod curve_editor;
 pub mod material;
 pub mod mesh;
 pub mod noise_map;
@@ -134,14 +138,17 @@ fn main() {
             .link()
     };
 
-    let mut point_light_source = PointLight {
+    let mut point_light_settings = PointLightSettings {
+        name: "Point Light".to_string(),
         position: glm::vec3(0.0, 10.0, 0.0),
-        ambient: glm::vec3(0.2, 0.2, 0.2),
-        diffuse: glm::vec3(0.5, 0.5, 0.5),
-        specular: glm::vec3(1.0, 1.0, 1.0),
+        ambient: glm::vec3(0.7, 0.7, 0.7),
+        diffuse: glm::vec3(0.2, 0.2, 0.2),
+        specular: glm::vec3(0.4, 0.4, 0.4),
     };
 
-    let mut water_material_settings = MaterialSettings {
+    let mut point_light_source = point_light_settings.get_point_light();
+
+    let water_material_settings = MaterialSettings {
         name: "Water".to_string(),
         ambient: [0.267, 0.322, 0.722],
         diffuse: [0.267, 0.322, 0.722],
@@ -150,27 +157,37 @@ fn main() {
         height_limit: 0.4,
     };
 
-    let mut grass_material_settings = MaterialSettings {
+    let grass_material_settings = MaterialSettings {
         name: "Grass".to_string(),
         ambient: [0.475, 0.91, 0.455],
         diffuse: [0.475, 0.91, 0.455],
         specular: [0.5, 0.5, 0.5],
         shininess: 2.0,
+        height_limit: 0.8,
+    };
+
+    let snow_material_settings = MaterialSettings {
+        name: "Snow".to_string(),
+        ambient: [1.0, 1.0, 1.0],
+        diffuse: [1.0, 1.0, 1.0],
+        specular: [1.0, 1.0, 1.0],
+        shininess: 32.0,
         height_limit: 1.0,
     };
 
     let grass_material = Material::new(&grass_material_settings);
-
     let water_material = Material::new(&water_material_settings);
+    let snow_material = Material::new(&snow_material_settings);
 
-    let mut materials = vec![water_material, grass_material];
-    let mut material_settings = vec![grass_material_settings, water_material_settings];
+    let mut materials = vec![water_material, grass_material, snow_material];
+    let mut material_settings = vec![
+        grass_material_settings,
+        water_material_settings,
+        snow_material_settings,
+    ];
 
     let mut noise_map_settings = noise_map_settings::NoiseMapSettings::new();
-
-    let noise_map = NoiseMap::new(noise_map_settings);
-    let terrain_mesh = noise_map.generate_mesh(&materials);
-
+    let terrain_mesh = NoiseMap::new(noise_map_settings).generate_mesh(&materials);
     let terrain_vao = unsafe { terrain_mesh.create_vao() };
 
     let mut scene = vec![SceneNode {
@@ -357,7 +374,7 @@ fn main() {
                     view_matrix = look_at * view_matrix;
 
                     let projection_matrix: glm::Mat4 =
-                        glm::perspective(window_aspect_ratio, glm::half_pi(), 1.0, 100.0);
+                        glm::perspective(window_aspect_ratio, glm::half_pi(), 1.0, 1000.0);
 
                     transformation_matrix = projection_matrix * view_matrix * transformation_matrix;
 
@@ -366,164 +383,59 @@ fn main() {
                     gl::Clear(gl::COLOR_BUFFER_BIT | gl::DEPTH_BUFFER_BIT);
 
                     let window = context.window();
-
                     let ui = imgui.frame();
+
                     let mut new_noise_map_settings = noise_map_settings.clone();
                     let mut new_material_settings = material_settings.clone();
 
                     ui.window("Settings")
-                        .size([300.0, 500.0], Condition::FirstUseEver)
+                        .size([300.0, 800.0], Condition::FirstUseEver)
                         .build(|| {
                             ui.text(format!("FPS: {}", (1.0 / delta_time).ceil()));
                             ui.separator();
+
                             ui.text("Terrain Settings");
-
-                            ui.slider("Width", 10, 500, &mut new_noise_map_settings.width);
-                            ui.slider("Height", 10, 500, &mut new_noise_map_settings.height);
-                            ui.slider("Scale", 0.0, 100.0, &mut new_noise_map_settings.scale);
-                            ui.slider("Octaves", 0, 20, &mut new_noise_map_settings.octaves);
-                            ui.slider(
-                                "Persistance",
-                                0.0,
-                                1.0,
-                                &mut new_noise_map_settings.persistence,
-                            );
-                            ui.slider(
-                                "Lacunarity",
-                                1.0,
-                                10.0,
-                                &mut new_noise_map_settings.lacunarity,
-                            );
-                            ui.slider("Seed", -100, 100, &mut new_noise_map_settings.seed);
-
-                            ui.slider(
-                                "Offset x",
-                                -10.0,
-                                10.0,
-                                &mut new_noise_map_settings.offset_x,
-                            );
-
-                            ui.slider(
-                                "Offset y",
-                                -10.0,
-                                10.0,
-                                &mut new_noise_map_settings.offset_y,
-                            );
+                            new_noise_map_settings.render(ui);
+                            CurveEditor::new("Terrain Curve Editor").render(ui);
 
                             ui.separator();
                             ui.text("Lighting");
-
-                            if CollapsingHeader::new("Lightsource").build(ui) {
-                                ui.slider("Ambient r", 0.0, 1.0, &mut point_light_source.ambient.x);
-                                ui.slider("Ambient g", 0.0, 1.0, &mut point_light_source.ambient.y);
-                                ui.slider("Ambient b", 0.0, 1.0, &mut point_light_source.ambient.z);
-
-                                ui.slider("Diffuse r", 0.0, 1.0, &mut point_light_source.diffuse.x);
-                                ui.slider("Diffuse g", 0.0, 1.0, &mut point_light_source.diffuse.y);
-                                ui.slider("Diffuse b", 0.0, 1.0, &mut point_light_source.diffuse.z);
-
-                                ui.slider(
-                                    "Specular r",
-                                    0.0,
-                                    1.0,
-                                    &mut point_light_source.specular.x,
-                                );
-                                ui.slider(
-                                    "Specular g",
-                                    0.0,
-                                    1.0,
-                                    &mut point_light_source.specular.y,
-                                );
-                                ui.slider(
-                                    "Specular b",
-                                    0.0,
-                                    1.0,
-                                    &mut point_light_source.specular.z,
-                                );
-                            }
+                            point_light_settings.render(ui);
 
                             ui.separator();
                             ui.text("Material Settings");
                             for material_setting in &mut new_material_settings {
-                                if CollapsingHeader::new(&material_setting.name).build(ui) {
-                                    ui.slider(
-                                        format!("Ambient r##{}", material_setting.name),
-                                        0.0,
-                                        1.0,
-                                        &mut material_setting.ambient[0],
-                                    );
-                                    ui.slider(
-                                        format!("Ambient g##{}", material_setting.name),
-                                        0.0,
-                                        1.0,
-                                        &mut material_setting.ambient[1],
-                                    );
-                                    ui.slider(
-                                        format!("Ambient b##{}", material_setting.name),
-                                        0.0,
-                                        1.0,
-                                        &mut material_setting.ambient[2],
-                                    );
-
-                                    ui.slider(
-                                        format!("Diffuse r##{}", material_setting.name),
-                                        0.0,
-                                        1.0,
-                                        &mut material_setting.diffuse[0],
-                                    );
-                                    ui.slider(
-                                        format!("Diffuse g##{}", material_setting.name),
-                                        0.0,
-                                        1.0,
-                                        &mut material_setting.diffuse[1],
-                                    );
-                                    ui.slider(
-                                        format!("Diffuse b##{}", material_setting.name),
-                                        0.0,
-                                        1.0,
-                                        &mut material_setting.diffuse[2],
-                                    );
-
-                                    ui.slider(
-                                        format!("Specular r##{}", material_setting.name),
-                                        0.0,
-                                        1.0,
-                                        &mut material_setting.specular[0],
-                                    );
-                                    ui.slider(
-                                        format!("Specular g##{}", material_setting.name),
-                                        0.0,
-                                        1.0,
-                                        &mut material_setting.specular[1],
-                                    );
-                                    ui.slider(
-                                        format!("Specular b##{}", material_setting.name),
-                                        0.0,
-                                        1.0,
-                                        &mut material_setting.specular[2],
-                                    );
-                                    ui.slider(
-                                        format!("Shininess##{}", material_setting.name),
-                                        0.0,
-                                        256.0,
-                                        &mut material_setting.shininess,
-                                    );
-
-                                    ui.slider(
-                                        format!("Height limit##{}", material_setting.name),
-                                        0.0,
-                                        1.0,
-                                        &mut material_setting.height_limit,
-                                    );
-                                }
+                                material_setting.render(ui);
                             }
                         });
 
-                    if new_noise_map_settings != noise_map_settings {
-                        noise_map_settings = new_noise_map_settings;
+                    point_light_source = point_light_settings.get_point_light();
 
-                        let new_noise_map = NoiseMap::new(noise_map_settings);
-                        let new_terrain_mesh = new_noise_map.generate_mesh(&materials);
+                    if new_material_settings != material_settings
+                        || new_noise_map_settings != noise_map_settings
+                    {
+                        let mut new_materials = vec![];
+
+                        for material_setting in &new_material_settings {
+                            new_materials.push(Material::new(&MaterialSettings {
+                                name: material_setting.name.clone(),
+                                ambient: material_setting.ambient,
+                                diffuse: material_setting.diffuse,
+                                specular: material_setting.specular,
+                                shininess: material_setting.shininess,
+                                height_limit: material_setting.height_limit,
+                            }));
+                        }
+
+                        //Sort materials
+                        new_materials.sort_by(|a, b| {
+                            a.height_limit
+                                .partial_cmp(&b.height_limit)
+                                .unwrap_or(Ordering::Equal)
+                        });
+
+                        let new_noise_map = NoiseMap::new(new_noise_map_settings);
+                        let new_terrain_mesh = new_noise_map.generate_mesh(&new_materials);
 
                         scene = vec![SceneNode {
                             vao_id: new_terrain_mesh.create_vao(),
@@ -534,6 +446,11 @@ fn main() {
                             scale: glm::vec3(1.0, 1.0, 1.0),
                             rotation: glm::vec3(0.0, 0.0, 0.0),
                         }];
+
+                        material_settings = new_material_settings;
+
+                        materials = new_materials;
+                        noise_map_settings = new_noise_map_settings;
                     }
 
                     draw_scene(
