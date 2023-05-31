@@ -14,7 +14,7 @@ pub struct Chunk {
     mesh_settings: MeshSettings,
 
     mesh: Mesh,
-    vao_id: u32,
+    pub vao_id: u32,
 }
 
 impl Chunk {

@@ -1,5 +1,6 @@
 use super::point_light_settings::PointLightSettings;
 
+#[derive(Clone)]
 pub struct PointLight {
     pub position: glm::Vec3,
     pub ambient: glm::Vec3,

@@ -68,6 +68,14 @@ impl ChunkContainer {
         }
     }
 
+    pub fn rebind_vaos(&mut self) {
+        for chunk in &mut self.current_visible_chunks {
+            if chunk.vao_id == 0 {
+                chunk.create_vao();
+            }
+        }
+    }
+
     pub fn generate_scene(&self, shader_id: u32) -> Vec<SceneNode> {
         self.current_visible_chunks
             .iter()

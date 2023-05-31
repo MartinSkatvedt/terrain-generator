@@ -1,5 +1,10 @@
 extern crate nalgebra_glm as glm;
-use std::{cmp::Ordering, ptr};
+use std::{
+    cmp::Ordering,
+    ptr,
+    sync::{Arc, Mutex},
+    thread,
+};
 
 use chunk_container::ChunkContainer;
 use curve_editor::curve::Curve;
@@ -19,6 +24,7 @@ use imgui::Condition;
 use material::{material_settings::MaterialSettings, Material};
 use mesh::mesh_settings::MeshSettings;
 use noise_map::noise_map_settings;
+use scenenode::SceneNode;
 pub mod chunk;
 pub mod chunk_container;
 pub mod curve_editor;
@@ -34,7 +40,7 @@ pub mod vertex;
 const INITIAL_SCREEN_W: u32 = 800;
 const INITIAL_SCREEN_H: u32 = 600;
 
-const VIEW_DISTANCE: f32 = 100.0;
+const VIEW_DISTANCE: f32 = 400.0;
 
 unsafe fn draw_scene(
     nodes: &Vec<scenenode::SceneNode>,
@@ -43,6 +49,9 @@ unsafe fn draw_scene(
     cam_pos: &glm::Vec3,
 ) {
     for node in nodes {
+        if node.vao_id == 0 {
+            continue;
+        }
         let mut model_matrix = glm::Mat4::identity();
         model_matrix = glm::translation(&glm::vec3(
             node.reference_point.x * -1.0,
@@ -174,7 +183,7 @@ fn main() {
         snow_material_settings,
     ];
 
-    let mut chunk_container = ChunkContainer::new(241, VIEW_DISTANCE);
+    let arc_chunk_container = Arc::new(Mutex::new(ChunkContainer::new(241, 200.0)));
 
     let first_frame_time = std::time::Instant::now();
     let mut previous_frame_time = first_frame_time;
@@ -187,11 +196,23 @@ fn main() {
     let mut cam_front: glm::Vec3 = glm::vec3(0.0, 0.0, -1.0);
     let cam_up: glm::Vec3 = glm::vec3(0.0, 1.0, 0.0);
 
-    let move_speed: f32 = 20.0;
+    let move_speed: f32 = 50.0;
     let cam_speed: f32 = 100.0;
 
-    chunk_container.generate_visible_chunks(cam_pos, &materials);
-    chunk_container.update_current_visible_chunks(&materials, &noise_map_settings, &mesh_settings);
+    let arc_chunk_container_clone = Arc::clone(&arc_chunk_container);
+    let material_clone = materials.clone();
+    let mesh_settings_clone = mesh_settings.clone();
+
+    thread::spawn(move || {
+        if let Ok(mut chunk_container) = arc_chunk_container_clone.lock() {
+            chunk_container.generate_visible_chunks(cam_pos, &material_clone);
+            chunk_container.update_current_visible_chunks(
+                &material_clone,
+                &noise_map_settings,
+                &mesh_settings_clone,
+            );
+        }
+    });
 
     // Start the event loop -- This is where window events are initially handled
     event_loop.run(move |event, _, control_flow| {
@@ -419,17 +440,30 @@ fn main() {
                         noise_map_settings = new_noise_map_settings;
                         mesh_settings = new_mesh_settings;
 
-                        chunk_container.update_current_visible_chunks(
-                            &materials,
-                            &noise_map_settings,
-                            &mesh_settings,
-                        );
+                        if let Ok(mut chunk_container) = arc_chunk_container.lock() {
+                            chunk_container.update_current_visible_chunks(
+                                &new_materials,
+                                &noise_map_settings,
+                                &mesh_settings,
+                            );
+                        }
                     }
 
                     point_light_source = point_light_settings.get_point_light();
+                    let mut scene: Vec<SceneNode> = vec![];
 
-                    chunk_container.generate_visible_chunks(cam_pos, &materials);
-                    let scene = chunk_container.generate_scene(shape_shader.program_id);
+                    let arc_chunk_container_clone = Arc::clone(&arc_chunk_container);
+                    let material_clone = materials.clone();
+                    thread::spawn(move || {
+                        if let Ok(mut chunk_container) = arc_chunk_container_clone.lock() {
+                            chunk_container.generate_visible_chunks(cam_pos, &material_clone);
+                        }
+                    });
+
+                    if let Ok(mut chunk_container) = arc_chunk_container.lock() {
+                        chunk_container.rebind_vaos();
+                        scene = chunk_container.generate_scene(shape_shader.program_id);
+                    }
 
                     draw_scene(
                         &scene,
@@ -437,7 +471,6 @@ fn main() {
                         &point_light_source,
                         &cam_pos,
                     );
-
                     winit_platform.prepare_render(&ui, &window);
                     renderer.render(&mut imgui);
                 }
