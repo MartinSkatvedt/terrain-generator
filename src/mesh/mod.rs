@@ -12,6 +12,7 @@ use crate::{
 
 use self::mesh_settings::MeshSettings;
 
+#[derive(Clone)]
 pub struct MeshMaterial {
     pub ambient: Vec<f32>,
     pub diffuse: Vec<f32>,
@@ -19,6 +20,7 @@ pub struct MeshMaterial {
     pub shininess: Vec<f32>,
 }
 
+#[derive(Clone)]
 pub struct Mesh {
     pub vertices: Vec<f32>,
     pub indices: Vec<u32>,

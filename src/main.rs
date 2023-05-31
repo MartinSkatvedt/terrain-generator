@@ -1,6 +1,7 @@
 extern crate nalgebra_glm as glm;
 use std::{cmp::Ordering, ptr};
 
+use chunk_container::ChunkContainer;
 use curve_editor::curve::Curve;
 use glutin::event::{
     ElementState::{Pressed, Released},
@@ -16,10 +17,10 @@ use light::point_light_settings::PointLightSettings;
 pub mod scenenode;
 use imgui::Condition;
 use material::{material_settings::MaterialSettings, Material};
-use mesh::{mesh_settings::MeshSettings, Mesh};
-use noise_map::{noise_map_settings, NoiseMap};
-use scenenode::SceneNode;
+use mesh::mesh_settings::MeshSettings;
+use noise_map::noise_map_settings;
 pub mod chunk;
+pub mod chunk_container;
 pub mod curve_editor;
 pub mod material;
 pub mod mesh;
@@ -32,6 +33,8 @@ pub mod vertex;
 // initial window size
 const INITIAL_SCREEN_W: u32 = 800;
 const INITIAL_SCREEN_H: u32 = 600;
+
+const VIEW_DISTANCE: f32 = 100.0;
 
 unsafe fn draw_scene(
     nodes: &Vec<scenenode::SceneNode>,
@@ -171,16 +174,7 @@ fn main() {
         snow_material_settings,
     ];
 
-    let chunk_1 = chunk::Chunk::new((0, 0), &materials);
-    let chunk_2 = chunk::Chunk::new((-1, 0), &materials);
-    let chunk_3 = chunk::Chunk::new((1, 0), &materials);
-    let chunk_4 = chunk::Chunk::new((0, 1), &materials);
-
-    let mut chunks = vec![chunk_1, chunk_2, chunk_3, chunk_4];
-    let mut scene = chunks
-        .iter()
-        .map(|c| c.get_scene_node(shape_shader.program_id))
-        .collect();
+    let mut chunk_container = ChunkContainer::new(241, VIEW_DISTANCE);
 
     let first_frame_time = std::time::Instant::now();
     let mut previous_frame_time = first_frame_time;
@@ -195,6 +189,9 @@ fn main() {
 
     let move_speed: f32 = 20.0;
     let cam_speed: f32 = 100.0;
+
+    chunk_container.generate_visible_chunks(cam_pos, &materials);
+    chunk_container.update_current_visible_chunks(&materials, &noise_map_settings, &mesh_settings);
 
     // Start the event loop -- This is where window events are initially handled
     event_loop.run(move |event, _, control_flow| {
@@ -356,7 +353,7 @@ fn main() {
                     view_matrix = look_at * view_matrix;
 
                     let projection_matrix: glm::Mat4 =
-                        glm::perspective(window_aspect_ratio, glm::half_pi(), 1.0, 1000.0);
+                        glm::perspective(window_aspect_ratio, glm::half_pi(), 1.0, VIEW_DISTANCE);
 
                     transformation_matrix = projection_matrix * view_matrix * transformation_matrix;
 
@@ -422,17 +419,17 @@ fn main() {
                         noise_map_settings = new_noise_map_settings;
                         mesh_settings = new_mesh_settings;
 
-                        chunks.iter_mut().for_each(|c| {
-                            c.update(&materials, &noise_map_settings, &mesh_settings);
-                        });
-
-                        scene = chunks
-                            .iter()
-                            .map(|c| c.get_scene_node(shape_shader.program_id))
-                            .collect();
+                        chunk_container.update_current_visible_chunks(
+                            &materials,
+                            &noise_map_settings,
+                            &mesh_settings,
+                        );
                     }
 
                     point_light_source = point_light_settings.get_point_light();
+
+                    chunk_container.generate_visible_chunks(cam_pos, &materials);
+                    let scene = chunk_container.generate_scene(shape_shader.program_id);
 
                     draw_scene(
                         &scene,

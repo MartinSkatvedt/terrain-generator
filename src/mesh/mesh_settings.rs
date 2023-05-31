@@ -8,6 +8,7 @@ pub struct MeshSettings {
     pub strength: f32,
     pub curve: Curve,
     pub level_of_detail: i32,
+    
 }
 
 impl MeshSettings {
