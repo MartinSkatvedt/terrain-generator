@@ -2,7 +2,13 @@ pub mod mesh_settings;
 
 use std::ptr;
 
-use crate::{material::Material, triangle::Triangle, utils, vertex::Vertex};
+use crate::{
+    material::Material,
+    noise_map::{noise_map_settings::NoiseMapSettings, NoiseMap},
+    triangle::Triangle,
+    utils,
+    vertex::Vertex,
+};
 
 use self::mesh_settings::MeshSettings;
 
@@ -25,12 +31,22 @@ pub struct Mesh {
 
 impl Mesh {
     pub fn mesh_from_height_map(
-        height_map: &Vec<Vec<f64>>,
         materials: &Vec<Material>,
+        noise_map_settings: &NoiseMapSettings,
         settings: &MeshSettings,
     ) -> Mesh {
-        let width = height_map.len() as u32;
-        let height = height_map[0].len() as u32;
+        let map_chunk_size = 241;
+
+        let noise_map = NoiseMap::new(*noise_map_settings);
+        let height_map = noise_map.get_height_map();
+
+        let mesh_simplification_increment = if settings.level_of_detail == 0 {
+            1
+        } else {
+            settings.level_of_detail * 2
+        };
+
+        let vertices_per_line = (map_chunk_size - 1) / mesh_simplification_increment + 1;
 
         let mut shape_vertices: Vec<Vertex> = Vec::new();
         let mut shape_triangles: Vec<Triangle> = Vec::new();
@@ -39,21 +55,24 @@ impl Mesh {
         let mut normals: Vec<f32> = Vec::new();
         let mut indices: Vec<u32> = Vec::new();
 
-        let half_x = width as f32 / 2.0;
-        let half_z = height as f32 / 2.0;
+        let top_left_x = (map_chunk_size - 1) as f32 / -2.0;
+        let top_left_z = (map_chunk_size - 1) as f32 / 2.0;
 
-        for x in 0..width {
-            for z in 0..height {
-                let vertex_height = height_map[x as usize][z as usize] as f32;
+        let mut vertex_index = 0;
+
+        for z in (0..map_chunk_size).step_by(mesh_simplification_increment as usize) {
+            for x in (0..map_chunk_size).step_by(mesh_simplification_increment as usize) {
+                let noise_height = height_map[x as usize][z as usize] as f32;
+                let vertex_height =
+                    settings.curve.evaluate(noise_height as f64) as f32 * settings.strength;
 
                 for material in materials.iter() {
-                    if vertex_height <= material.height_limit {
+                    if noise_height <= material.height_limit {
                         let vertex = Vertex {
                             position: glm::vec3(
-                                (x as f32) - half_x,
-                                settings.curve.evaluate(vertex_height as f64) as f32
-                                    * settings.strength,
-                                z as f32 - half_z,
+                                top_left_x + x as f32,
+                                vertex_height,
+                                top_left_z - z as f32,
                             ),
                             material: *material,
                         };
@@ -63,22 +82,23 @@ impl Mesh {
                     }
                 }
 
-                if x < width - 1 && z < height - 1 {
+                if x < map_chunk_size - 1 && z < map_chunk_size - 1 {
                     let triangle_1 = Triangle::new(
-                        (x * height + (z + 1)) as usize,
-                        ((x + 1) * height + z) as usize,
-                        (x * height + z) as usize,
+                        (vertex_index) as usize,
+                        (vertex_index + vertices_per_line + 1) as usize,
+                        (vertex_index + vertices_per_line) as usize,
                     );
 
                     let triangle_2 = Triangle::new(
-                        (x * height + (z + 1)) as usize,
-                        ((x + 1) * height + (z + 1)) as usize,
-                        ((x + 1) * height + z) as usize,
+                        (vertex_index + vertices_per_line + 1) as usize,
+                        (vertex_index) as usize,
+                        (vertex_index + 1) as usize,
                     );
 
                     shape_triangles.push(triangle_1);
                     shape_triangles.push(triangle_2);
                 }
+                vertex_index += 1;
             }
         }
         let mut vertex_normals: Vec<glm::Vec3> =

@@ -29,6 +29,50 @@ impl MaterialSettings {
         }
     }
 
+    pub fn standard_water_material() -> Self {
+        MaterialSettings {
+            name: "Water".to_string(),
+            ambient: [0.267, 0.322, 0.722],
+            diffuse: [0.267, 0.322, 0.722],
+            specular: [1.0, 1.0, 1.0],
+            shininess: 16.0,
+            height_limit: 0.4,
+        }
+    }
+
+    pub fn standard_sand_material() -> Self {
+        MaterialSettings {
+            name: "Sand".to_string(),
+            ambient: [0.8, 0.8, 0.4],
+            diffuse: [0.8, 0.8, 0.4],
+            specular: [0.5, 0.5, 0.5],
+            shininess: 2.0,
+            height_limit: 0.43,
+        }
+    }
+
+    pub fn standard_grass_material() -> Self {
+        MaterialSettings {
+            name: "Grass".to_string(),
+            ambient: [0.475, 0.91, 0.455],
+            diffuse: [0.475, 0.91, 0.455],
+            specular: [0.5, 0.5, 0.5],
+            shininess: 2.0,
+            height_limit: 0.8,
+        }
+    }
+
+    pub fn standard_snow_material() -> Self {
+        MaterialSettings {
+            name: "Snow".to_string(),
+            ambient: [1.0, 1.0, 1.0],
+            diffuse: [1.0, 1.0, 1.0],
+            specular: [1.0, 1.0, 1.0],
+            shininess: 32.0,
+            height_limit: 1.0,
+        }
+    }
+
     pub fn render(&mut self, ui: &Ui) {
         if CollapsingHeader::new(&self.name).build(ui) {
             ui.slider(

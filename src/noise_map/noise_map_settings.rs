@@ -15,8 +15,8 @@ pub struct NoiseMapSettings {
 impl NoiseMapSettings {
     pub fn new() -> NoiseMapSettings {
         NoiseMapSettings {
-            width: 40,
-            height: 40,
+            width: 241,
+            height: 241,
             scale: 20.0,
             octaves: 5,
             persistence: 0.5,
@@ -28,8 +28,6 @@ impl NoiseMapSettings {
     }
 
     pub fn render(&mut self, ui: &Ui) {
-        ui.slider("Width", 10, 500, &mut self.width);
-        ui.slider("Height", 10, 500, &mut self.height);
         ui.slider("Scale", 0.0, 100.0, &mut self.scale);
         ui.slider("Octaves", 0, 20, &mut self.octaves);
         ui.slider("Persistance", 0.0, 1.0, &mut self.persistence);

@@ -16,9 +16,10 @@ use light::point_light_settings::PointLightSettings;
 pub mod scenenode;
 use imgui::Condition;
 use material::{material_settings::MaterialSettings, Material};
-use mesh::mesh_settings::MeshSettings;
+use mesh::{mesh_settings::MeshSettings, Mesh};
 use noise_map::{noise_map_settings, NoiseMap};
 use scenenode::SceneNode;
+pub mod chunk;
 pub mod curve_editor;
 pub mod material;
 pub mod mesh;
@@ -33,7 +34,7 @@ const INITIAL_SCREEN_W: u32 = 800;
 const INITIAL_SCREEN_H: u32 = 600;
 
 unsafe fn draw_scene(
-    nodes: &mut Vec<scenenode::SceneNode>,
+    nodes: &Vec<scenenode::SceneNode>,
     view_projection_matrix: &glm::Mat4,
     light: &PointLight,
     cam_pos: &glm::Vec3,
@@ -139,8 +140,8 @@ fn main() {
     };
 
     let cubic_curve = Curve::cubic();
-    let mut standard_mesh_settings =
-        MeshSettings::new("Standard Mesh".to_string(), 10.0, cubic_curve);
+    let mut mesh_settings = MeshSettings::new(" Mesh".to_string(), 10.0, cubic_curve, 0);
+    let mut noise_map_settings = noise_map_settings::NoiseMapSettings::new();
 
     let mut point_light_settings = PointLightSettings {
         name: "Point Light".to_string(),
@@ -152,48 +153,17 @@ fn main() {
 
     let mut point_light_source = point_light_settings.get_point_light();
 
-    let water_material_settings = MaterialSettings {
-        name: "Water".to_string(),
-        ambient: [0.267, 0.322, 0.722],
-        diffuse: [0.267, 0.322, 0.722],
-        specular: [1.0, 1.0, 1.0],
-        shininess: 16.0,
-        height_limit: 0.4,
-    };
-
-    let sand_material_settings = MaterialSettings {
-        name: "Sand".to_string(),
-        ambient: [0.8, 0.8, 0.4],
-        diffuse: [0.8, 0.8, 0.4],
-        specular: [0.5, 0.5, 0.5],
-        shininess: 2.0,
-        height_limit: 0.45,
-    };
-
-    let grass_material_settings = MaterialSettings {
-        name: "Grass".to_string(),
-        ambient: [0.475, 0.91, 0.455],
-        diffuse: [0.475, 0.91, 0.455],
-        specular: [0.5, 0.5, 0.5],
-        shininess: 2.0,
-        height_limit: 0.8,
-    };
-
-    let snow_material_settings = MaterialSettings {
-        name: "Snow".to_string(),
-        ambient: [1.0, 1.0, 1.0],
-        diffuse: [1.0, 1.0, 1.0],
-        specular: [1.0, 1.0, 1.0],
-        shininess: 32.0,
-        height_limit: 1.0,
-    };
+    let water_material_settings = MaterialSettings::standard_water_material();
+    let sand_material_settings = MaterialSettings::standard_sand_material();
+    let grass_material_settings = MaterialSettings::standard_grass_material();
+    let snow_material_settings = MaterialSettings::standard_snow_material();
 
     let grass_material = Material::new(&grass_material_settings);
     let sand_material = Material::new(&sand_material_settings);
     let water_material = Material::new(&water_material_settings);
     let snow_material = Material::new(&snow_material_settings);
 
-    let mut materials = vec![water_material, sand_material, grass_material, snow_material];
+    let materials = vec![water_material, sand_material, grass_material, snow_material];
     let mut material_settings = vec![
         water_material_settings,
         sand_material_settings,
@@ -201,20 +171,16 @@ fn main() {
         snow_material_settings,
     ];
 
-    let mut noise_map_settings = noise_map_settings::NoiseMapSettings::new();
-    let terrain_mesh =
-        NoiseMap::new(noise_map_settings).generate_mesh(&materials, &mut standard_mesh_settings);
-    let terrain_vao = unsafe { terrain_mesh.create_vao() };
+    let chunk_1 = chunk::Chunk::new((0, 0), &materials);
+    let chunk_2 = chunk::Chunk::new((-1, 0), &materials);
+    let chunk_3 = chunk::Chunk::new((1, 0), &materials);
+    let chunk_4 = chunk::Chunk::new((0, 1), &materials);
 
-    let mut scene = vec![SceneNode {
-        vao_id: terrain_vao,
-        index_count: terrain_mesh.indices.len() as i32,
-        shader_program: shape_shader.program_id,
-        position: glm::vec3(0.0, 0.0, 0.0),
-        reference_point: glm::vec3(0.0, 0.0, 0.0),
-        scale: glm::vec3(1.0, 1.0, 1.0),
-        rotation: glm::vec3(0.0, 0.0, 0.0),
-    }];
+    let mut chunks = vec![chunk_1, chunk_2, chunk_3, chunk_4];
+    let mut scene = chunks
+        .iter()
+        .map(|c| c.get_scene_node(shape_shader.program_id))
+        .collect();
 
     let first_frame_time = std::time::Instant::now();
     let mut previous_frame_time = first_frame_time;
@@ -227,7 +193,7 @@ fn main() {
     let mut cam_front: glm::Vec3 = glm::vec3(0.0, 0.0, -1.0);
     let cam_up: glm::Vec3 = glm::vec3(0.0, 1.0, 0.0);
 
-    let move_speed: f32 = 10.0;
+    let move_speed: f32 = 20.0;
     let cam_speed: f32 = 100.0;
 
     // Start the event loop -- This is where window events are initially handled
@@ -401,7 +367,7 @@ fn main() {
                     let window = context.window();
                     let ui = imgui.frame();
 
-                    let mut new_mesh_settings = standard_mesh_settings.clone();
+                    let mut new_mesh_settings = mesh_settings.clone();
                     let mut new_noise_map_settings = noise_map_settings.clone();
                     let mut new_material_settings = material_settings.clone();
 
@@ -428,14 +394,12 @@ fn main() {
                             }
                         });
 
-                    point_light_source = point_light_settings.get_point_light();
-
                     if new_material_settings != material_settings
                         || new_noise_map_settings != noise_map_settings
-                        || new_mesh_settings != standard_mesh_settings
+                        || new_mesh_settings != mesh_settings
                     {
+                        // Update materials to match new settings
                         let mut new_materials = vec![];
-
                         for material_setting in &new_material_settings {
                             new_materials.push(Material::new(&MaterialSettings {
                                 name: material_setting.name.clone(),
@@ -454,29 +418,24 @@ fn main() {
                                 .unwrap_or(Ordering::Equal)
                         });
 
-                        let new_noise_map = NoiseMap::new(new_noise_map_settings);
-                        let new_terrain_mesh =
-                            new_noise_map.generate_mesh(&new_materials, &mut new_mesh_settings);
-
-                        scene = vec![SceneNode {
-                            vao_id: new_terrain_mesh.create_vao(),
-                            index_count: new_terrain_mesh.indices.len() as i32,
-                            shader_program: shape_shader.program_id,
-                            position: glm::vec3(0.0, 0.0, 0.0),
-                            reference_point: glm::vec3(0.0, 0.0, 0.0),
-                            scale: glm::vec3(1.0, 1.0, 1.0),
-                            rotation: glm::vec3(0.0, 0.0, 0.0),
-                        }];
-
                         material_settings = new_material_settings;
-
-                        materials = new_materials;
                         noise_map_settings = new_noise_map_settings;
-                        standard_mesh_settings = new_mesh_settings;
+                        mesh_settings = new_mesh_settings;
+
+                        chunks.iter_mut().for_each(|c| {
+                            c.update(&materials, &noise_map_settings, &mesh_settings);
+                        });
+
+                        scene = chunks
+                            .iter()
+                            .map(|c| c.get_scene_node(shape_shader.program_id))
+                            .collect();
                     }
 
+                    point_light_source = point_light_settings.get_point_light();
+
                     draw_scene(
-                        &mut scene,
+                        &scene,
                         &transformation_matrix,
                         &point_light_source,
                         &cam_pos,

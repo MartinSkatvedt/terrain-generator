@@ -1,5 +1,4 @@
 pub mod noise_map_settings;
-use crate::{material::Material, mesh::mesh_settings::MeshSettings, mesh::Mesh};
 use lininterp::InvLerp;
 use noise::{NoiseFn, Perlin};
 use rand::prelude::*;
@@ -87,9 +86,7 @@ impl NoiseMap {
         NoiseMap { data: noise_map }
     }
 
-    pub fn generate_mesh(&self, materials: &Vec<Material>, settings: &MeshSettings) -> Mesh {
-        let mesh = Mesh::mesh_from_height_map(&self.data, materials, settings);
-
-        mesh
+    pub fn get_height_map(&self) -> &Vec<Vec<f64>> {
+        &self.data
     }
 }
