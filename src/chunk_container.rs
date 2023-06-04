@@ -1,7 +1,7 @@
 use std::{collections::HashMap, rc::Rc, thread::JoinHandle};
 
 use crate::{
-    chunk::Chunk, material::Material, mesh::mesh_settings::MeshSettings,
+    chunk::Chunk, lod::LevelOfDetailInfo, material::Material, mesh::mesh_settings::MeshSettings,
     noise_map::noise_map_settings::NoiseMapSettings, scenenode::SceneNode,
 };
 
@@ -18,6 +18,8 @@ pub struct ChunkContainer {
     noise_map_settings: NoiseMapSettings,
     mesh_settings: MeshSettings,
     materials: Vec<Material>,
+
+    detail_levels: Vec<LevelOfDetailInfo>,
 }
 
 impl ChunkContainer {
@@ -30,16 +32,30 @@ impl ChunkContainer {
     ) -> Self {
         let chunks_visible_in_view_dst = (view_distance / chunk_size as f32).round() as i32;
 
+        let detail_levels = vec![
+            LevelOfDetailInfo::new(0, 200.0),
+            LevelOfDetailInfo::new(1, 300.0),
+            LevelOfDetailInfo::new(2, 400.0),
+            LevelOfDetailInfo::new(4, 600.0),
+        ];
+
         Self {
             chunk_size,
             chunks_visible_in_view_dst,
             chunk_map: HashMap::new(),
             current_visible_chunks: Vec::new(),
             chunks_in_queue: Vec::new(),
-            default_chunk: Rc::new(Chunk::new((0, 0), &materials)),
+            default_chunk: Rc::new(Chunk::create_chunk(
+                (0, 0),
+                &materials,
+                &noise_map_settings,
+                &mesh_settings,
+                &detail_levels,
+            )),
             materials: materials.clone(),
             noise_map_settings: noise_map_settings.clone(),
             mesh_settings: mesh_settings.clone(),
+            detail_levels,
         }
     }
 
@@ -78,6 +94,7 @@ impl ChunkContainer {
                         &self.materials,
                         &self.noise_map_settings,
                         &self.mesh_settings,
+                        &self.detail_levels,
                     );
                     self.chunks_in_queue.push(handle);
 
@@ -98,7 +115,7 @@ impl ChunkContainer {
             if handle.is_finished() {
                 let mut chunk = handle.join().unwrap();
 
-                chunk.rebind_vao();
+                chunk.rebind_vaos();
 
                 self.chunk_map.insert(chunk.position, Rc::new(chunk));
             } else {
@@ -129,8 +146,9 @@ impl ChunkContainer {
             &self.materials,
             &self.noise_map_settings,
             &self.mesh_settings,
+            &self.detail_levels,
         );
-        new_default_chunk.rebind_vao();
+        new_default_chunk.rebind_vaos();
 
         self.default_chunk = Rc::new(new_default_chunk);
 
@@ -140,10 +158,25 @@ impl ChunkContainer {
             .push(Rc::clone(&self.default_chunk));
     }
 
-    pub fn generate_scene(&mut self, shader_id: u32) -> Vec<SceneNode> {
+    pub fn generate_scene(&mut self, shader_id: u32, camera_position: glm::Vec3) -> Vec<SceneNode> {
         let mut scene: Vec<SceneNode> = Vec::new();
         for chunk in self.current_visible_chunks.iter() {
-            scene.push(chunk.get_scene_node(shader_id));
+            let chunk_world_position = glm::vec3(
+                chunk.position.0 as f32 * self.chunk_size as f32,
+                0.0,
+                chunk.position.1 as f32 * self.chunk_size as f32,
+            );
+
+            let distance_to_chunk = glm::distance(&camera_position, &chunk_world_position);
+
+            let mut lod_index = 0;
+            for (index, detail_level) in self.detail_levels.iter().enumerate() {
+                if distance_to_chunk > detail_level.distance {
+                    lod_index = index;
+                }
+            }
+
+            scene.push(chunk.get_scene_node(shader_id, lod_index));
         }
         scene
     }

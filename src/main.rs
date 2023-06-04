@@ -23,6 +23,7 @@ use scenenode::SceneNode;
 pub mod chunk;
 pub mod chunk_container;
 pub mod curve_editor;
+pub mod lod;
 pub mod material;
 pub mod mesh;
 pub mod noise_map;
@@ -35,7 +36,7 @@ pub mod vertex;
 const INITIAL_SCREEN_W: u32 = 800;
 const INITIAL_SCREEN_H: u32 = 600;
 
-const VIEW_DISTANCE: f32 = 800.0;
+const VIEW_DISTANCE: f32 = 600.0;
 
 unsafe fn draw_scene(
     nodes: &Vec<scenenode::SceneNode>,
@@ -178,7 +179,7 @@ fn main() {
 
     let mut chunk_container = ChunkContainer::new(
         241,
-        VIEW_DISTANCE - 400.0,
+        VIEW_DISTANCE,
         &materials,
         &mut noise_map_settings,
         &mesh_settings,
@@ -451,7 +452,7 @@ fn main() {
                     chunk_container.update_chunk_map();
 
                     let scene: Vec<SceneNode> =
-                        chunk_container.generate_scene(shape_shader.program_id);
+                        chunk_container.generate_scene(shape_shader.program_id, cam_pos);
 
                     draw_scene(
                         &scene,

@@ -30,6 +30,8 @@ pub struct Mesh {
 
     pub index_count: i32,
 
+    pub vao_id: u32,
+
     buffer_ids: Vec<u32>,
 }
 
@@ -157,6 +159,7 @@ impl Mesh {
 
             index_count: shape_triangles.len() as i32 * 3,
 
+            vao_id: 0,
             buffer_ids: Vec::new(),
         };
         mesh
@@ -329,6 +332,7 @@ impl Mesh {
 
         self.buffer_ids.push(ibo_ids);
 
+        self.vao_id = vao_ids;
         vao_ids
     }
 }
