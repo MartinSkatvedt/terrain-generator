@@ -1,5 +1,5 @@
 extern crate nalgebra_glm as glm;
-use std::{cmp::Ordering, ptr, time::Instant};
+use std::{cmp::Ordering, ptr};
 
 use chunk_container::ChunkContainer;
 use curve_editor::curve::Curve;
@@ -35,7 +35,7 @@ pub mod vertex;
 const INITIAL_SCREEN_W: u32 = 800;
 const INITIAL_SCREEN_H: u32 = 600;
 
-const VIEW_DISTANCE: f32 = 400.0;
+const VIEW_DISTANCE: f32 = 800.0;
 
 unsafe fn draw_scene(
     nodes: &Vec<scenenode::SceneNode>,
@@ -158,8 +158,6 @@ fn main() {
         specular: glm::vec3(0.4, 0.4, 0.4),
     };
 
-    let point_light_source = point_light_settings.get_point_light();
-
     let water_material_settings = MaterialSettings::standard_water_material();
     let sand_material_settings = MaterialSettings::standard_sand_material();
     let grass_material_settings = MaterialSettings::standard_grass_material();
@@ -178,7 +176,13 @@ fn main() {
         snow_material_settings,
     ];
 
-    let mut chunk_container = ChunkContainer::new(241, 200.0, &materials);
+    let mut chunk_container = ChunkContainer::new(
+        241,
+        VIEW_DISTANCE - 400.0,
+        &materials,
+        &mut noise_map_settings,
+        &mesh_settings,
+    );
 
     let first_frame_time = std::time::Instant::now();
     let mut previous_frame_time = first_frame_time;
@@ -191,10 +195,10 @@ fn main() {
     let mut cam_front: glm::Vec3 = glm::vec3(0.0, 0.0, -1.0);
     let cam_up: glm::Vec3 = glm::vec3(0.0, 1.0, 0.0);
 
-    let move_speed: f32 = 50.0;
+    let move_speed: f32 = 100.0;
     let cam_speed: f32 = 100.0;
 
-    chunk_container.generate_visible_chunks(cam_pos, &materials);
+    chunk_container.generate_visible_chunks(cam_pos);
 
     // Start the event loop -- This is where window events are initially handled
     event_loop.run(move |event, _, control_flow| {
@@ -434,14 +438,15 @@ fn main() {
                     }
 
                     if should_rebuild {
-                        chunk_container.update_current_visible_chunks(
+                        chunk_container.update_settings(
                             &materials,
                             &noise_map_settings,
                             &mesh_settings,
                         );
+                        chunk_container.clear_chunk_container_for_update(cam_pos)
                     }
 
-                    chunk_container.generate_visible_chunks(cam_pos, &materials);
+                    chunk_container.generate_visible_chunks(cam_pos);
 
                     chunk_container.update_chunk_map();
 

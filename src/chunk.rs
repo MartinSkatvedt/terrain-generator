@@ -1,10 +1,6 @@
-use std::{
-    collections::HashMap,
-    thread::{self, JoinHandle},
-};
+use std::thread::{self, JoinHandle};
 
 use crate::{
-    chunk_container::ChunkContainer,
     curve_editor::curve::Curve,
     material::Material,
     mesh::{mesh_settings::MeshSettings, Mesh},
@@ -15,8 +11,6 @@ use crate::{
 #[derive(Clone)]
 pub struct Chunk {
     pub position: (i32, i32),
-    noise_map_settings: NoiseMapSettings,
-    mesh_settings: MeshSettings,
 
     mesh: Mesh,
     pub vao_id: u32,
@@ -29,46 +23,52 @@ impl Chunk {
 
         let noise_map_settings = NoiseMapSettings::new();
         let mesh_settings = MeshSettings::new(name, 10.0, cubic_curve, 0);
-        let mut mesh = Mesh::create_terrain_mesh(&materials, &noise_map_settings, &mesh_settings);
-        let vao_id = unsafe { mesh.create_vao() };
+        let mesh = Mesh::create_terrain_mesh(&materials, &noise_map_settings, &mesh_settings);
 
         Self {
             position,
-            noise_map_settings,
-            mesh_settings,
 
             mesh,
-            vao_id,
+            vao_id: 0,
+        }
+    }
+
+    pub fn create_chunk(
+        position: (i32, i32),
+        materials: &Vec<Material>,
+        noise_map_settings: &NoiseMapSettings,
+        mesh_settings: &MeshSettings,
+    ) -> Self {
+        let mesh = Mesh::create_terrain_mesh(materials, noise_map_settings, mesh_settings);
+
+        Self {
+            position,
+
+            mesh,
+            vao_id: 0,
         }
     }
 
     pub fn request_chunk_generation(
         position: (i32, i32),
         materials: &Vec<Material>,
-    ) -> JoinHandle<Chunk> {
-        let material_clone = materials.clone();
-        let handle = thread::spawn(move || {
-            let chunk = Chunk::new(position, &material_clone);
-
-            chunk
-        });
-
-        handle
-    }
-
-    pub fn update_and_regenerate(
-        &mut self,
-        materials: &Vec<Material>,
         noise_map_settings: &NoiseMapSettings,
         mesh_settings: &MeshSettings,
-    ) {
-        self.noise_map_settings = noise_map_settings.clone();
-        self.mesh_settings = mesh_settings.clone();
+    ) -> JoinHandle<Chunk> {
+        let material_clone = materials.clone();
+        let noise_map_settings_clone = noise_map_settings.clone();
+        let mesh_settings_clone = mesh_settings.clone();
 
-        self.mesh =
-            Mesh::create_terrain_mesh(&materials, &self.noise_map_settings, &self.mesh_settings);
+        thread::spawn(move || {
+            let chunk = Chunk::create_chunk(
+                position,
+                &material_clone,
+                &noise_map_settings_clone,
+                &mesh_settings_clone,
+            );
 
-        self.vao_id = unsafe { self.mesh.create_vao() };
+            chunk
+        })
     }
 
     pub fn rebind_vao(&mut self) {
