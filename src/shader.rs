@@ -17,6 +17,7 @@ pub enum ShaderType {
     TessellationControl,
     TessellationEvaluation,
     Geometry,
+    Compute,
 }
 
 impl Shader {
@@ -39,6 +40,7 @@ impl Into<gl::types::GLenum> for ShaderType {
             ShaderType::TessellationControl => gl::TESS_CONTROL_SHADER,
             ShaderType::TessellationEvaluation => gl::TESS_EVALUATION_SHADER,
             ShaderType::Geometry => gl::GEOMETRY_SHADER,
+            ShaderType::Compute => gl::COMPUTE_SHADER,
         }
     }
 }
@@ -51,6 +53,7 @@ impl ShaderType {
             "tcs" => Ok(ShaderType::TessellationControl),
             "tes" => Ok(ShaderType::TessellationEvaluation),
             "geom" => Ok(ShaderType::Geometry),
+            "comp" => Ok(ShaderType::Compute),
             e => Err(e.to_string()),
         }
     }

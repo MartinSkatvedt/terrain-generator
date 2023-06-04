@@ -29,19 +29,12 @@ pub struct Mesh {
     pub material: MeshMaterial,
 
     pub index_count: i32,
+
+    buffer_ids: Vec<u32>,
 }
 
 impl Mesh {
-    pub fn request_mesh(
-        materials: &Vec<Material>,
-        noise_map_settings: &NoiseMapSettings,
-        settings: &MeshSettings,
-    ) -> Mesh {
-        let mut mesh = Mesh::mesh_from_height_map(materials, noise_map_settings, settings);
-        mesh
-    }
-
-    pub fn mesh_from_height_map(
+    pub fn create_terrain_mesh(
         materials: &Vec<Material>,
         noise_map_settings: &NoiseMapSettings,
         settings: &MeshSettings,
@@ -163,10 +156,18 @@ impl Mesh {
             material: mesh_material,
 
             index_count: shape_triangles.len() as i32 * 3,
+
+            buffer_ids: Vec::new(),
         };
         mesh
     }
-    pub unsafe fn create_vao(&self) -> u32 {
+
+    pub fn delete_buffers(&mut self) {
+        unsafe {
+            gl::DeleteBuffers(self.buffer_ids.len() as i32, self.buffer_ids.as_ptr());
+        }
+    }
+    pub unsafe fn create_vao(&mut self) -> u32 {
         let mut vao_ids: u32 = 0;
         gl::GenVertexArrays(1, &mut vao_ids as *mut u32);
         gl::BindVertexArray(vao_ids);
@@ -181,6 +182,8 @@ impl Mesh {
             utils::pointer_to_array(&self.vertices),
             gl::STATIC_DRAW,
         );
+
+        self.buffer_ids.push(vbo_ids);
 
         gl::VertexAttribPointer(
             0,
@@ -204,6 +207,8 @@ impl Mesh {
             gl::STATIC_DRAW,
         );
 
+        self.buffer_ids.push(ambient_vbo_ids);
+
         gl::VertexAttribPointer(
             1,
             3,
@@ -225,6 +230,8 @@ impl Mesh {
             utils::pointer_to_array(&self.material.diffuse),
             gl::STATIC_DRAW,
         );
+
+        self.buffer_ids.push(diffuse_vbo_ids);
 
         gl::VertexAttribPointer(
             2,
@@ -248,6 +255,8 @@ impl Mesh {
             gl::STATIC_DRAW,
         );
 
+        self.buffer_ids.push(specular_vbo_ids);
+
         gl::VertexAttribPointer(
             3,
             3,
@@ -269,6 +278,8 @@ impl Mesh {
             utils::pointer_to_array(&self.material.shininess),
             gl::STATIC_DRAW,
         );
+
+        self.buffer_ids.push(shininess_vbo_ids);
 
         gl::VertexAttribPointer(
             4,
@@ -292,6 +303,8 @@ impl Mesh {
             gl::STATIC_DRAW,
         );
 
+        self.buffer_ids.push(normvec_vbo_ids);
+
         gl::VertexAttribPointer(
             5,
             3,
@@ -313,6 +326,8 @@ impl Mesh {
             utils::pointer_to_array(&self.indices),
             gl::STATIC_DRAW,
         );
+
+        self.buffer_ids.push(ibo_ids);
 
         vao_ids
     }

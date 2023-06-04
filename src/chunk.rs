@@ -1,6 +1,10 @@
-use std::thread;
+use std::{
+    collections::HashMap,
+    thread::{self, JoinHandle},
+};
 
 use crate::{
+    chunk_container::ChunkContainer,
     curve_editor::curve::Curve,
     material::Material,
     mesh::{mesh_settings::MeshSettings, Mesh},
@@ -10,8 +14,7 @@ use crate::{
 
 #[derive(Clone)]
 pub struct Chunk {
-    position: (i32, i32),
-    materials: Vec<Material>,
+    pub position: (i32, i32),
     noise_map_settings: NoiseMapSettings,
     mesh_settings: MeshSettings,
 
@@ -26,12 +29,11 @@ impl Chunk {
 
         let noise_map_settings = NoiseMapSettings::new();
         let mesh_settings = MeshSettings::new(name, 10.0, cubic_curve, 0);
-        let mesh = Mesh::mesh_from_height_map(&materials, &noise_map_settings, &mesh_settings);
+        let mut mesh = Mesh::create_terrain_mesh(&materials, &noise_map_settings, &mesh_settings);
         let vao_id = unsafe { mesh.create_vao() };
 
         Self {
             position,
-            materials: materials.clone(),
             noise_map_settings,
             mesh_settings,
 
@@ -40,57 +42,37 @@ impl Chunk {
         }
     }
 
-    pub fn request_new_chunk(position: (i32, i32), materials: &Vec<Material>, callback: fn(Chunk)) {
-        let name = format!("Chunk ({}, {}) mesh", position.0, position.1);
-        let cubic_curve = Curve::cubic();
-
-        let noise_map_settings = NoiseMapSettings::new();
-        let mesh_settings = MeshSettings::new(name, 10.0, cubic_curve, 0);
+    pub fn request_chunk_generation(
+        position: (i32, i32),
+        materials: &Vec<Material>,
+    ) -> JoinHandle<Chunk> {
         let material_clone = materials.clone();
-
         let handle = thread::spawn(move || {
-            let mesh =
-                Mesh::mesh_from_height_map(&material_clone, &noise_map_settings, &mesh_settings);
+            let chunk = Chunk::new(position, &material_clone);
 
-            let chunk = Chunk {
-                position,
-                materials: material_clone,
-                noise_map_settings,
-                mesh_settings,
-
-                mesh,
-                vao_id: 0,
-            };
-
-            callback(chunk);
+            chunk
         });
+
+        handle
     }
 
-    pub fn update(
+    pub fn update_and_regenerate(
         &mut self,
         materials: &Vec<Material>,
         noise_map_settings: &NoiseMapSettings,
         mesh_settings: &MeshSettings,
     ) {
-        self.materials = materials.clone();
         self.noise_map_settings = noise_map_settings.clone();
         self.mesh_settings = mesh_settings.clone();
 
-        self.mesh = Mesh::mesh_from_height_map(
-            &self.materials,
-            &self.noise_map_settings,
-            &self.mesh_settings,
-        );
+        self.mesh =
+            Mesh::create_terrain_mesh(&materials, &self.noise_map_settings, &self.mesh_settings);
 
-        unsafe {
-            self.vao_id = self.mesh.create_vao();
-        }
+        self.vao_id = unsafe { self.mesh.create_vao() };
     }
 
-    pub fn create_vao(&mut self) {
-        unsafe {
-            self.vao_id = self.mesh.create_vao();
-        }
+    pub fn rebind_vao(&mut self) {
+        self.vao_id = unsafe { self.mesh.create_vao() };
     }
 
     pub fn get_scene_node(&self, shader_id: u32) -> SceneNode {

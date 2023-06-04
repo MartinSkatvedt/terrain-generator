@@ -1,10 +1,5 @@
 extern crate nalgebra_glm as glm;
-use std::{
-    cmp::Ordering,
-    ptr,
-    sync::{Arc, Mutex},
-    thread,
-};
+use std::{cmp::Ordering, ptr, time::Instant};
 
 use chunk_container::ChunkContainer;
 use curve_editor::curve::Curve;
@@ -163,7 +158,7 @@ fn main() {
         specular: glm::vec3(0.4, 0.4, 0.4),
     };
 
-    let mut point_light_source = point_light_settings.get_point_light();
+    let point_light_source = point_light_settings.get_point_light();
 
     let water_material_settings = MaterialSettings::standard_water_material();
     let sand_material_settings = MaterialSettings::standard_sand_material();
@@ -183,7 +178,7 @@ fn main() {
         snow_material_settings,
     ];
 
-    let mut chunk_container = ChunkContainer::new(241, 200.0);
+    let mut chunk_container = ChunkContainer::new(241, 200.0, &materials);
 
     let first_frame_time = std::time::Instant::now();
     let mut previous_frame_time = first_frame_time;
@@ -200,8 +195,6 @@ fn main() {
     let cam_speed: f32 = 100.0;
 
     chunk_container.generate_visible_chunks(cam_pos, &materials);
-    chunk_container.update_current_visible_chunks(&materials, &noise_map_settings, &mesh_settings);
-    chunk_container.wait_for_all_threads_to_finish();
 
     // Start the event loop -- This is where window events are initially handled
     event_loop.run(move |event, _, control_flow| {
@@ -448,12 +441,10 @@ fn main() {
                         );
                     }
 
-                    // thread::spawn(move || {
-                    //     if let Ok(mut chunk_container) = arc_chunk_container_clone.lock() {
-                    //     }
-                    // });
-
                     chunk_container.generate_visible_chunks(cam_pos, &materials);
+
+                    chunk_container.update_chunk_map();
+
                     let scene: Vec<SceneNode> =
                         chunk_container.generate_scene(shape_shader.program_id);
 
