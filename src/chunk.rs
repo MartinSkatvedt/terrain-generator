@@ -1,3 +1,5 @@
+use std::thread;
+
 use crate::{
     curve_editor::curve::Curve,
     material::Material,
@@ -36,6 +38,32 @@ impl Chunk {
             mesh,
             vao_id,
         }
+    }
+
+    pub fn request_new_chunk(position: (i32, i32), materials: &Vec<Material>, callback: fn(Chunk)) {
+        let name = format!("Chunk ({}, {}) mesh", position.0, position.1);
+        let cubic_curve = Curve::cubic();
+
+        let noise_map_settings = NoiseMapSettings::new();
+        let mesh_settings = MeshSettings::new(name, 10.0, cubic_curve, 0);
+        let material_clone = materials.clone();
+
+        let handle = thread::spawn(move || {
+            let mesh =
+                Mesh::mesh_from_height_map(&material_clone, &noise_map_settings, &mesh_settings);
+
+            let chunk = Chunk {
+                position,
+                materials: material_clone,
+                noise_map_settings,
+                mesh_settings,
+
+                mesh,
+                vao_id: 0,
+            };
+
+            callback(chunk);
+        });
     }
 
     pub fn update(

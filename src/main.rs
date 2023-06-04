@@ -175,7 +175,7 @@ fn main() {
     let water_material = Material::new(&water_material_settings);
     let snow_material = Material::new(&snow_material_settings);
 
-    let materials = vec![water_material, sand_material, grass_material, snow_material];
+    let mut materials = vec![water_material, sand_material, grass_material, snow_material];
     let mut material_settings = vec![
         water_material_settings,
         sand_material_settings,
@@ -183,7 +183,7 @@ fn main() {
         snow_material_settings,
     ];
 
-    let arc_chunk_container = Arc::new(Mutex::new(ChunkContainer::new(241, 200.0)));
+    let mut chunk_container = ChunkContainer::new(241, 200.0);
 
     let first_frame_time = std::time::Instant::now();
     let mut previous_frame_time = first_frame_time;
@@ -199,20 +199,9 @@ fn main() {
     let move_speed: f32 = 50.0;
     let cam_speed: f32 = 100.0;
 
-    let arc_chunk_container_clone = Arc::clone(&arc_chunk_container);
-    let material_clone = materials.clone();
-    let mesh_settings_clone = mesh_settings.clone();
-
-    thread::spawn(move || {
-        if let Ok(mut chunk_container) = arc_chunk_container_clone.lock() {
-            chunk_container.generate_visible_chunks(cam_pos, &material_clone);
-            chunk_container.update_current_visible_chunks(
-                &material_clone,
-                &noise_map_settings,
-                &mesh_settings_clone,
-            );
-        }
-    });
+    chunk_container.generate_visible_chunks(cam_pos, &materials);
+    chunk_container.update_current_visible_chunks(&materials, &noise_map_settings, &mesh_settings);
+    chunk_container.wait_for_all_threads_to_finish();
 
     // Start the event loop -- This is where window events are initially handled
     event_loop.run(move |event, _, control_flow| {
@@ -412,10 +401,9 @@ fn main() {
                             }
                         });
 
-                    if new_material_settings != material_settings
-                        || new_noise_map_settings != noise_map_settings
-                        || new_mesh_settings != mesh_settings
-                    {
+                    let mut should_rebuild = false;
+
+                    if new_material_settings != material_settings {
                         // Update materials to match new settings
                         let mut new_materials = vec![];
                         for material_setting in &new_material_settings {
@@ -437,38 +425,42 @@ fn main() {
                         });
 
                         material_settings = new_material_settings;
+                        materials = new_materials;
+                        should_rebuild = true;
+                    }
+
+                    if new_noise_map_settings != noise_map_settings {
                         noise_map_settings = new_noise_map_settings;
+                        should_rebuild = true;
+                    }
+
+                    if new_mesh_settings != mesh_settings {
                         mesh_settings = new_mesh_settings;
 
-                        if let Ok(mut chunk_container) = arc_chunk_container.lock() {
-                            chunk_container.update_current_visible_chunks(
-                                &new_materials,
-                                &noise_map_settings,
-                                &mesh_settings,
-                            );
-                        }
+                        should_rebuild = true;
                     }
 
-                    point_light_source = point_light_settings.get_point_light();
-                    let mut scene: Vec<SceneNode> = vec![];
-
-                    let arc_chunk_container_clone = Arc::clone(&arc_chunk_container);
-                    let material_clone = materials.clone();
-                    thread::spawn(move || {
-                        if let Ok(mut chunk_container) = arc_chunk_container_clone.lock() {
-                            chunk_container.generate_visible_chunks(cam_pos, &material_clone);
-                        }
-                    });
-
-                    if let Ok(mut chunk_container) = arc_chunk_container.lock() {
-                        chunk_container.rebind_vaos();
-                        scene = chunk_container.generate_scene(shape_shader.program_id);
+                    if should_rebuild {
+                        chunk_container.update_current_visible_chunks(
+                            &materials,
+                            &noise_map_settings,
+                            &mesh_settings,
+                        );
                     }
+
+                    // thread::spawn(move || {
+                    //     if let Ok(mut chunk_container) = arc_chunk_container_clone.lock() {
+                    //     }
+                    // });
+
+                    chunk_container.generate_visible_chunks(cam_pos, &materials);
+                    let scene: Vec<SceneNode> =
+                        chunk_container.generate_scene(shape_shader.program_id);
 
                     draw_scene(
                         &scene,
                         &transformation_matrix,
-                        &point_light_source,
+                        &point_light_settings.get_point_light(),
                         &cam_pos,
                     );
                     winit_platform.prepare_render(&ui, &window);

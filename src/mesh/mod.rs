@@ -32,6 +32,15 @@ pub struct Mesh {
 }
 
 impl Mesh {
+    pub fn request_mesh(
+        materials: &Vec<Material>,
+        noise_map_settings: &NoiseMapSettings,
+        settings: &MeshSettings,
+    ) -> Mesh {
+        let mut mesh = Mesh::mesh_from_height_map(materials, noise_map_settings, settings);
+        mesh
+    }
+
     pub fn mesh_from_height_map(
         materials: &Vec<Material>,
         noise_map_settings: &NoiseMapSettings,
