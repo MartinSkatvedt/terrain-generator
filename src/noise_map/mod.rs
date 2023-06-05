@@ -1,5 +1,4 @@
 pub mod noise_map_settings;
-use lininterp::InvLerp;
 use noise::{NoiseFn, Perlin};
 use rand::prelude::*;
 
@@ -28,11 +27,8 @@ impl NoiseMap {
 
         let mut max_possible_height = 0.0;
         let mut amplitude = 1.0;
-        let mut frequency = 1.0;
 
         let perlin = Perlin::new(seed as u32);
-        let mut max_noise_height = f64::MIN;
-        let mut min_noise_height = f64::MAX;
 
         let half_width = width as f64 / 2.0;
         let half_height = height as f64 / 2.0;
@@ -55,7 +51,7 @@ impl NoiseMap {
         for y in 0..height {
             for x in 0..width {
                 amplitude = 1.0;
-                frequency = 1.0;
+                let mut frequency = 1.0;
                 let mut noise_height = 0.0;
 
                 for octave in 0..octaves {
@@ -71,12 +67,6 @@ impl NoiseMap {
                     noise_height += noise_value * amplitude;
                     amplitude *= persistence;
                     frequency *= lacunarity;
-                }
-
-                if noise_height > max_noise_height {
-                    max_noise_height = noise_height;
-                } else if noise_height < min_noise_height {
-                    min_noise_height = noise_height;
                 }
 
                 noise_map[x as usize][y as usize] =
