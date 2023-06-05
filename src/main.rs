@@ -196,7 +196,7 @@ fn main() {
     let mut cam_front: glm::Vec3 = glm::vec3(0.0, 0.0, -1.0);
     let cam_up: glm::Vec3 = glm::vec3(0.0, 1.0, 0.0);
 
-    let move_speed: f32 = 100.0;
+    let move_speed: f32 = 150.0;
     let cam_speed: f32 = 100.0;
 
     chunk_container.generate_visible_chunks(cam_pos);
