@@ -1,7 +1,8 @@
 extern crate nalgebra_glm as glm;
 use std::{cmp::Ordering, ptr};
 
-use chunk_container::ChunkContainer;
+use camera::Camera;
+use chunk::ChunkContainer;
 use curve_editor::curve::Curve;
 use glutin::event::{
     ElementState::{Pressed, Released},
@@ -20,8 +21,8 @@ use material::{material_settings::MaterialSettings, Material};
 use mesh::mesh_settings::MeshSettings;
 use noise_map::noise_map_settings;
 use scenenode::SceneNode;
+pub mod camera;
 pub mod chunk;
-pub mod chunk_container;
 pub mod curve_editor;
 pub mod lod;
 pub mod material;
@@ -31,6 +32,9 @@ pub mod shader;
 pub mod triangle;
 pub mod utils;
 pub mod vertex;
+
+const CHUNK_PIXEL_SIZE: i32 = 480;
+const WATER_LEVEL: f64 = 0.0;
 
 // initial window size
 const INITIAL_SCREEN_W: u32 = 800;
@@ -147,7 +151,7 @@ fn main() {
             .link()
     };
 
-    let cubic_curve = Curve::cubic();
+    let cubic_curve = Curve::quadratic();
     let mut mesh_settings = MeshSettings::new(" Mesh".to_string(), 10.0, cubic_curve, 0);
     let mut noise_map_settings = noise_map_settings::NoiseMapSettings::new();
 
@@ -178,7 +182,7 @@ fn main() {
     ];
 
     let mut chunk_container = ChunkContainer::new(
-        241,
+        CHUNK_PIXEL_SIZE + 1,
         VIEW_DISTANCE,
         &materials,
         &mut noise_map_settings,
@@ -188,18 +192,9 @@ fn main() {
     let first_frame_time = std::time::Instant::now();
     let mut previous_frame_time = first_frame_time;
 
-    let mut cam_pos: glm::Vec3 = glm::vec3(0.0, 4.0, 5.0);
-    let mut cam_dir: glm::Vec3 = glm::vec3(1.0, 0.0, 1.0);
-    let mut yaw: f32 = -90.0;
-    let mut pitch: f32 = 0.0;
+    let mut camera = Camera::new();
 
-    let mut cam_front: glm::Vec3 = glm::vec3(0.0, 0.0, -1.0);
-    let cam_up: glm::Vec3 = glm::vec3(0.0, 1.0, 0.0);
-
-    let move_speed: f32 = 150.0;
-    let cam_speed: f32 = 100.0;
-
-    chunk_container.generate_visible_chunks(cam_pos);
+    chunk_container.generate_visible_chunks(camera.position);
 
     // Start the event loop -- This is where window events are initially handled
     event_loop.run(move |event, _, control_flow| {
@@ -297,68 +292,15 @@ fn main() {
 
                 // Handle keyboard input
                 for key in pressed_keys.iter() {
-                    match key {
-                        // The `VirtualKeyCode` enum is defined here:
-                        //    https://docs.rs/winit/0.25.0/winit/event/enum.VirtualKeyCode.html
-                        VirtualKeyCode::D => {
-                            //print
-                            cam_pos += move_speed
-                                * delta_time
-                                * glm::normalize(&glm::cross(&cam_front, &cam_up));
-                        }
-                        VirtualKeyCode::A => {
-                            cam_pos -= move_speed
-                                * delta_time
-                                * glm::normalize(&glm::cross(&cam_front, &cam_up));
-                        }
-
-                        VirtualKeyCode::Space => {
-                            cam_pos += move_speed * delta_time * cam_up;
-                        }
-                        VirtualKeyCode::LShift => {
-                            cam_pos -= move_speed * delta_time * cam_up;
-                        }
-
-                        VirtualKeyCode::W => {
-                            cam_pos += move_speed * delta_time * cam_front;
-                        }
-                        VirtualKeyCode::S => {
-                            cam_pos -= move_speed * delta_time * cam_front;
-                        }
-
-                        VirtualKeyCode::Up => {
-                            pitch += delta_time * cam_speed;
-                        }
-                        VirtualKeyCode::Down => {
-                            pitch -= delta_time * cam_speed;
-                        }
-
-                        VirtualKeyCode::Left => {
-                            yaw -= delta_time * cam_speed;
-                        }
-                        VirtualKeyCode::Right => {
-                            yaw += delta_time * cam_speed;
-                        }
-
-                        // default handler:
-                        _ => {}
-                    }
+                    camera.handle_key_input(*key, delta_time);
                 }
 
                 unsafe {
                     let mut transformation_matrix: glm::Mat4 = glm::identity();
                     let mut view_matrix: glm::Mat4 = glm::identity();
 
-                    cam_dir.x = yaw.to_radians().cos() * pitch.to_radians().cos();
-                    cam_dir.y = pitch.to_radians().sin();
-                    cam_dir.z = yaw.to_radians().sin() * pitch.to_radians().cos();
-
-                    cam_front = glm::normalize(&cam_dir);
-
-                    let look_at: glm::Mat4 =
-                        glm::look_at(&cam_pos, &(cam_pos + cam_front), &cam_up);
-
-                    view_matrix = look_at * view_matrix;
+                    camera.update_camera_vectors();
+                    view_matrix = camera.get_look_at_matrix() * view_matrix;
 
                     let projection_matrix: glm::Mat4 =
                         glm::perspective(window_aspect_ratio, glm::half_pi(), 1.0, VIEW_DISTANCE);
@@ -444,21 +386,21 @@ fn main() {
                             &noise_map_settings,
                             &mesh_settings,
                         );
-                        chunk_container.clear_chunk_container_for_update(cam_pos)
+                        chunk_container.clear_chunk_container_for_update(camera.position)
                     }
 
-                    chunk_container.generate_visible_chunks(cam_pos);
+                    chunk_container.generate_visible_chunks(camera.position);
 
                     chunk_container.update_chunk_map();
 
                     let scene: Vec<SceneNode> =
-                        chunk_container.generate_scene(shape_shader.program_id, cam_pos);
+                        chunk_container.generate_scene(shape_shader.program_id, camera.position);
 
                     draw_scene(
                         &scene,
                         &transformation_matrix,
                         &point_light_settings.get_point_light(),
-                        &cam_pos,
+                        &camera.position,
                     );
                     winit_platform.prepare_render(&ui, &window);
                     renderer.render(&mut imgui);

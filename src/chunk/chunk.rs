@@ -3,9 +3,10 @@ use std::thread::{self, JoinHandle};
 use crate::{
     lod::LevelOfDetailInfo,
     material::Material,
-    mesh::{self, mesh_settings::MeshSettings, Mesh},
+    mesh::{mesh_settings::MeshSettings, Mesh},
     noise_map::noise_map_settings::NoiseMapSettings,
     scenenode::SceneNode,
+    CHUNK_PIXEL_SIZE,
 };
 
 #[derive(Clone)]
@@ -27,8 +28,8 @@ impl Chunk {
         let mut meshes = Vec::new();
 
         let mut adjusted_noise_map_settings = noise_map_settings.clone();
-        adjusted_noise_map_settings.offset_x = position.0 as f64 * 240.0;
-        adjusted_noise_map_settings.offset_y = position.1 as f64 * 240.0;
+        adjusted_noise_map_settings.offset_x = position.0 as f64 * CHUNK_PIXEL_SIZE as f64;
+        adjusted_noise_map_settings.offset_y = position.1 as f64 * CHUNK_PIXEL_SIZE as f64;
 
         for lod in level_of_details {
             let mut adjusted_mesh_settings = mesh_settings.clone();
@@ -88,9 +89,9 @@ impl Chunk {
             shader_program: shader_id,
 
             position: glm::vec3(
-                self.position.0 as f32 * 240.0,
+                self.position.0 as f32 * CHUNK_PIXEL_SIZE as f32,
                 0.0,
-                self.position.1 as f32 * 240.0,
+                self.position.1 as f32 * CHUNK_PIXEL_SIZE as f32,
             ),
             rotation: glm::vec3(0.0, 0.0, 0.0),
             scale: glm::vec3(1.0, 1.0, 1.0),

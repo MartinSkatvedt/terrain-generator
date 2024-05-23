@@ -1,3 +1,4 @@
+pub mod mesh_material;
 pub mod mesh_settings;
 
 use std::ptr;
@@ -8,17 +9,10 @@ use crate::{
     triangle::Triangle,
     utils,
     vertex::Vertex,
+    CHUNK_PIXEL_SIZE,
 };
 
-use self::mesh_settings::MeshSettings;
-
-#[derive(Clone)]
-pub struct MeshMaterial {
-    pub ambient: Vec<f32>,
-    pub diffuse: Vec<f32>,
-    pub specular: Vec<f32>,
-    pub shininess: Vec<f32>,
-}
+use self::{mesh_material::MeshMaterial, mesh_settings::MeshSettings};
 
 #[derive(Clone)]
 pub struct Mesh {
@@ -41,7 +35,7 @@ impl Mesh {
         noise_map_settings: &NoiseMapSettings,
         settings: &MeshSettings,
     ) -> Mesh {
-        let map_chunk_size = 241;
+        let map_chunk_size = CHUNK_PIXEL_SIZE + 1;
 
         let noise_map = NoiseMap::new(*noise_map_settings);
         let height_map = noise_map.get_height_map();

@@ -1,4 +1,6 @@
 use imgui::Ui;
+
+use crate::CHUNK_PIXEL_SIZE;
 #[derive(Clone, Copy, PartialEq)]
 pub struct NoiseMapSettings {
     pub width: i32,
@@ -15,8 +17,8 @@ pub struct NoiseMapSettings {
 impl NoiseMapSettings {
     pub fn new() -> NoiseMapSettings {
         NoiseMapSettings {
-            width: 241,
-            height: 241,
+            width: CHUNK_PIXEL_SIZE + 1,
+            height: CHUNK_PIXEL_SIZE + 1,
             scale: 20.0,
             octaves: 5,
             persistence: 0.5,

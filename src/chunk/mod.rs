@@ -1,9 +1,12 @@
 use std::{collections::HashMap, rc::Rc, thread::JoinHandle};
 
 use crate::{
-    chunk::Chunk, lod::LevelOfDetailInfo, material::Material, mesh::mesh_settings::MeshSettings,
+    lod::LevelOfDetailInfo, material::Material, mesh::mesh_settings::MeshSettings,
     noise_map::noise_map_settings::NoiseMapSettings, scenenode::SceneNode,
 };
+
+use self::chunk::Chunk;
+pub mod chunk;
 
 pub struct ChunkContainer {
     chunk_size: i32,
@@ -133,7 +136,6 @@ impl ChunkContainer {
         );
 
         for handle in self.chunks_in_queue.drain(..) {
-            println!("Chunk generation thread finished");
             handle.join().unwrap();
         }
 
